@@ -1,0 +1,55 @@
+import { createRouter, createWebHistory } from '@ionic/vue-router'
+import type { RouteRecordRaw } from 'vue-router'
+import { useBudgetStore } from '@/stores/budget'
+
+const routes: RouteRecordRaw[] = [
+  { path: '/', redirect: '/tabs/home' },
+  {
+    path: '/onboarding',
+    component: () => import('@/views/OnboardingPage.vue'),
+    meta: { public: true },
+  },
+  {
+    path: '/tabs/',
+    component: () => import('@/views/TabsPage.vue'),
+    children: [
+      { path: '', redirect: '/tabs/home' },
+      { path: 'home', component: () => import('@/views/HomePage.vue') },
+      { path: 'transactions', component: () => import('@/views/TransactionsPage.vue') },
+      { path: 'budgets', component: () => import('@/views/BudgetsPage.vue') },
+      { path: 'salary', component: () => import('@/views/SalaryPage.vue') },
+      { path: 'more', component: () => import('@/views/MorePage.vue') },
+    ],
+  },
+  { path: '/wallets', component: () => import('@/views/WalletsPage.vue') },
+  { path: '/categories', component: () => import('@/views/CategoriesPage.vue') },
+  { path: '/goals', component: () => import('@/views/GoalsPage.vue') },
+  { path: '/recurring', component: () => import('@/views/RecurringPage.vue') },
+  { path: '/reports', component: () => import('@/views/ReportsPage.vue') },
+  { path: '/settings', component: () => import('@/views/SettingsPage.vue') },
+  { path: '/currencies', component: () => import('@/views/CurrenciesPage.vue') },
+]
+
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes,
+})
+
+/**
+ * First run sends the user to onboarding, because the base currency has to be chosen
+ * before any amount in the app can be rendered meaningfully.
+ */
+router.beforeEach(async (to) => {
+  const store = useBudgetStore()
+  await store.init()
+
+  if (!store.settings.onboardingComplete && !to.meta.public) {
+    return { path: '/onboarding' }
+  }
+  if (store.settings.onboardingComplete && to.path === '/onboarding') {
+    return { path: '/tabs/home' }
+  }
+  return true
+})
+
+export default router

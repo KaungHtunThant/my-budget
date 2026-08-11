@@ -1,0 +1,183 @@
+/**
+ * Theme tokens.
+ *
+ * The palette leans on a single green accent for money-positive states and a red for
+ * money-negative, because those two readings are the ones a budget app has to make
+ * instantly legible. Everything else stays neutral so numbers dominate the screen.
+ */
+
+:root {
+  --ion-color-primary: #2a6b5f;
+  --ion-color-primary-rgb: 42, 107, 95;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: #255e54;
+  --ion-color-primary-tint: #3f7a6f;
+
+  --ion-color-secondary: #4a6fa5;
+  --ion-color-secondary-rgb: 74, 111, 165;
+  --ion-color-secondary-contrast: #ffffff;
+  --ion-color-secondary-contrast-rgb: 255, 255, 255;
+  --ion-color-secondary-shade: #416291;
+  --ion-color-secondary-tint: #5c7dae;
+
+  --ion-color-tertiary: #7a5ea8;
+  --ion-color-tertiary-rgb: 122, 94, 168;
+  --ion-color-tertiary-contrast: #ffffff;
+  --ion-color-tertiary-contrast-rgb: 255, 255, 255;
+  --ion-color-tertiary-shade: #6b5394;
+  --ion-color-tertiary-tint: #876eb1;
+
+  --ion-color-success: #1f8a5b;
+  --ion-color-success-rgb: 31, 138, 91;
+  --ion-color-success-contrast: #ffffff;
+  --ion-color-success-contrast-rgb: 255, 255, 255;
+  --ion-color-success-shade: #1b7950;
+  --ion-color-success-tint: #35966b;
+
+  --ion-color-warning: #c98a1b;
+  --ion-color-warning-rgb: 201, 138, 27;
+  --ion-color-warning-contrast: #000000;
+  --ion-color-warning-contrast-rgb: 0, 0, 0;
+  --ion-color-warning-shade: #b17918;
+  --ion-color-warning-tint: #ce9632;
+
+  --ion-color-danger: #c0392b;
+  --ion-color-danger-rgb: 192, 57, 43;
+  --ion-color-danger-contrast: #ffffff;
+  --ion-color-danger-contrast-rgb: 255, 255, 255;
+  --ion-color-danger-shade: #a93226;
+  --ion-color-danger-tint: #c64d40;
+
+  /* App-level tokens used by the custom cards and figures. */
+  --app-surface: #ffffff;
+  --app-surface-sunken: #f2f4f5;
+  --app-border: rgba(0, 0, 0, 0.09);
+  --app-text-muted: #6b7280;
+  --app-radius: 16px;
+  --app-radius-sm: 10px;
+  --app-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 14px rgba(0, 0, 0, 0.04);
+}
+
+.ion-palette-dark {
+  --app-surface: #1c1f24;
+  --app-surface-sunken: #15181c;
+  --app-border: rgba(255, 255, 255, 0.11);
+  --app-text-muted: #9aa3ae;
+  --app-shadow: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared layout primitives                                            */
+/* ------------------------------------------------------------------ */
+
+.app-card {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius);
+  box-shadow: var(--app-shadow);
+  padding: 16px;
+  margin: 0 0 12px;
+}
+
+.app-card--flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Stack a card's children vertically — needed wherever a label sits above a big figure. */
+.app-card--stack {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/*
+ * Ionic toggles and radios lay their label out in a flex row that does not wrap by
+ * default, which truncates any two-line description. Allow wrapping.
+ */
+ion-toggle::part(label),
+ion-radio::part(label) {
+  white-space: normal;
+}
+
+ion-toggle .app-wrap p,
+ion-item ion-label p {
+  white-space: normal;
+}
+
+.app-section-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--app-text-muted);
+  margin: 22px 4px 10px;
+}
+
+.app-muted {
+  color: var(--app-text-muted);
+}
+
+.app-figure {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  letter-spacing: -0.02em;
+}
+
+.app-figure--hero {
+  font-size: 2.1rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.app-figure--large {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.app-row-split {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.app-content {
+  --padding-start: 14px;
+  --padding-end: 14px;
+  --padding-top: 8px;
+  --padding-bottom: 96px;
+  --background: var(--app-surface-sunken);
+}
+
+.app-meter {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--app-border);
+  overflow: hidden;
+}
+
+.app-meter__fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 220ms ease;
+}
+
+.app-chip-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.app-chip-row::-webkit-scrollbar {
+  display: none;
+}
