@@ -13,7 +13,7 @@ import {
   homeOutline,
   pieChartOutline,
   swapVerticalOutline,
-  walletOutline,
+  trophyOutline,
 } from 'ionicons/icons'
 </script>
 
@@ -34,9 +34,9 @@ import {
           <IonIcon :icon="pieChartOutline" />
           <IonLabel>Budgets</IonLabel>
         </IonTabButton>
-        <IonTabButton tab="salary" href="/tabs/salary">
-          <IonIcon :icon="walletOutline" />
-          <IonLabel>Salary</IonLabel>
+        <IonTabButton tab="goals" href="/tabs/goals">
+          <IonIcon :icon="trophyOutline" />
+          <IonLabel>Goals</IonLabel>
         </IonTabButton>
         <IonTabButton tab="more" href="/tabs/more">
           <IonIcon :icon="ellipsisHorizontalOutline" />

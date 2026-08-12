@@ -15,7 +15,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import type { CurrencyCode } from '@/domain/currency'
-import { type Money, money, subtract, sum, zero } from '@/domain/money'
+import { type Money, zero } from '@/domain/money'
 import {
   type BaseContext,
   budgetStatuses,
@@ -25,7 +25,6 @@ import {
   periodSummary,
   periodTrend,
   spendByCategory,
-  toBase,
 } from '@/domain/budgeting'
 import {
   type BudgetPeriodConfig,
@@ -36,20 +35,16 @@ import {
   todayIso,
 } from '@/domain/period'
 import type {
-  Allocation,
-  AllocationTemplate,
   Budget,
   Category,
   CategoryKind,
   Id,
   NewBudget,
   NewCategory,
-  NewPayslip,
   NewRecurringRule,
   NewSavingsGoal,
   NewTransaction,
   NewWallet,
-  Payslip,
   RecurringRule,
   SavingsGoal,
   Settings,
@@ -77,9 +72,6 @@ export const useBudgetStore = defineStore('budget', () => {
   const balances = ref<Record<Id, Money>>({})
   const categories = ref<Category[]>([])
   const transactions = ref<Transaction[]>([])
-  const payslips = ref<Payslip[]>([])
-  const allocations = ref<Allocation[]>([])
-  const templates = ref<AllocationTemplate[]>([])
   const budgets = ref<Budget[]>([])
   const rules = ref<RecurringRule[]>([])
   const goals = ref<SavingsGoal[]>([])
@@ -141,31 +133,6 @@ export const useBudgetStore = defineStore('budget', () => {
     goalStatuses(goals.value, transactions.value, ctx.value, todayIso(), periodConfig.value),
   )
 
-  /**
-   * Net pay this period minus everything already allocated to budgets and goals.
-   * This is the number the payday flow is really about: what is still unassigned.
-   */
-  const unallocated = computed(() => {
-    const paidThisPeriod = payslips.value.filter(
-      (p) => p.date >= period.value.start && p.date <= period.value.end,
-    )
-    const netTotal = sum(
-      paidThisPeriod.map((p) => toBase(p.net, ctx.value) ?? zero(base.value)),
-      base.value,
-    )
-    const allocatedTotal = allocations.value
-      .filter((a) => paidThisPeriod.some((p) => p.id === a.payslipId))
-      .flatMap((a) => a.lines)
-      .reduce((acc, line) => {
-        if (line.mode === 'percent') {
-          return acc + Math.round((netTotal.minor * (line.percent ?? 0)) / 100)
-        }
-        const fixed = line.fixedAmount ? toBase(line.fixedAmount, ctx.value) : null
-        return acc + (fixed?.minor ?? 0)
-      }, 0)
-    return subtract(netTotal, money(allocatedTotal, base.value))
-  })
-
   /** Currencies in use that have no rate against base — surfaced as a settings nudge. */
   const missingRates = computed<CurrencyCode[]>(() => {
     const used = new Set(wallets.value.map((w) => w.currency))
@@ -189,13 +156,10 @@ export const useBudgetStore = defineStore('budget', () => {
     loading.value = true
     try {
       settings.value = await repo.getSettings()
-      const [w, c, t, p, a, tpl, b, r, g] = await Promise.all([
+      const [w, c, t, b, r, g] = await Promise.all([
         repo.listWallets(),
         repo.listCategories(),
         repo.listTransactions(),
-        repo.listPayslips(),
-        repo.listAllocations(),
-        repo.listAllocationTemplates(),
         repo.listBudgets(),
         repo.listRecurringRules(),
         repo.listGoals(),
@@ -203,9 +167,6 @@ export const useBudgetStore = defineStore('budget', () => {
       wallets.value = w
       categories.value = c
       transactions.value = t
-      payslips.value = p
-      allocations.value = a
-      templates.value = tpl
       budgets.value = b
       rules.value = r
       goals.value = g
@@ -350,59 +311,6 @@ export const useBudgetStore = defineStore('budget', () => {
 
   const recentTransactions = computed(() => transactions.value.slice(0, 8))
 
-  // --- payslips and allocation ---------------------------------------------
-
-  async function addPayslip(payslip: NewPayslip, alsoRecordIncome: boolean): Promise<Payslip> {
-    const created = await repo.createPayslip(payslip)
-    if (alsoRecordIncome) {
-      const salaryCategory =
-        categories.value.find((c) => c.kind === 'income' && c.name === 'Salary') ??
-        categories.value.find((c) => c.kind === 'income')
-      await repo.createTransaction({
-        type: 'income',
-        amount: created.net,
-        fx: null,
-        walletId: created.walletId,
-        toWalletId: null,
-        toAmount: null,
-        categoryId: salaryCategory?.id ?? null,
-        date: created.date,
-        note: `${created.employer} — ${created.periodLabel}`,
-        recurringRuleId: null,
-        payslipId: created.id,
-        goalId: null,
-      })
-    }
-    await reload()
-    return created
-  }
-
-  async function removePayslip(id: Id): Promise<void> {
-    await repo.deletePayslip(id)
-    await reload()
-  }
-
-  async function saveAllocation(payslipId: Id, lines: Allocation['lines']): Promise<void> {
-    const existing = allocations.value.filter((a) => a.payslipId === payslipId)
-    for (const a of existing) await repo.deleteAllocation(a.id)
-    await repo.createAllocation({ payslipId, lines })
-    await reload()
-  }
-
-  async function addTemplate(name: string, lines: Allocation['lines']): Promise<void> {
-    await repo.createAllocationTemplate({ name, lines })
-    await reload()
-  }
-
-  async function removeTemplate(id: Id): Promise<void> {
-    await repo.deleteAllocationTemplate(id)
-    await reload()
-  }
-
-  function allocationFor(payslipId: Id): Allocation | null {
-    return allocations.value.find((a) => a.payslipId === payslipId) ?? null
-  }
-
   // --- budgets -------------------------------------------------------------
 
   async function addBudget(budget: NewBudget): Promise<void> {
@@ -469,7 +377,6 @@ export const useBudgetStore = defineStore('budget', () => {
       date: todayIso(),
       note: goal.name,
       recurringRuleId: null,
-      payslipId: null,
       goalId,
     })
     await reload()
@@ -484,9 +391,6 @@ export const useBudgetStore = defineStore('budget', () => {
     balances,
     categories,
     transactions,
-    payslips,
-    allocations,
-    templates,
     budgets,
     rules,
     goals,
@@ -510,7 +414,6 @@ export const useBudgetStore = defineStore('budget', () => {
     budgetStatusList,
     budgetSummary,
     goalStatusList,
-    unallocated,
     missingRates,
     periodTransactions,
     recentTransactions,
@@ -536,12 +439,6 @@ export const useBudgetStore = defineStore('budget', () => {
     addTransaction,
     editTransaction,
     removeTransaction,
-    addPayslip,
-    removePayslip,
-    saveAllocation,
-    addTemplate,
-    removeTemplate,
-    allocationFor,
     addBudget,
     editBudget,
     removeBudget,

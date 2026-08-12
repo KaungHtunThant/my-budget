@@ -1,8 +1,8 @@
 # My Budget
 
-An offline-first Android app for managing a salary: record payslips, split each payday
-across budgets and savings goals, track spending against those budgets, and hold money in
-more than one currency.
+An offline-first Android app for managing a monthly income: record what comes in and what
+goes out, set a spending limit per category, save towards goals, and hold money in more
+than one currency.
 
 Everything lives on the device. The app makes no network requests — even its icons and
 fonts are bundled — and the only planned online feature is an optional Google Drive backup,
@@ -53,7 +53,7 @@ src/
     money.ts      integer minor-unit arithmetic
     fx.ts         manual-rate conversion and frozen rate snapshots
     period.ts     budget cycles (calendar month, payday-anchored, weekly, fortnightly)
-    budgeting.ts  budget rollups, goal progress, payday allocation, report aggregation
+    budgeting.ts  budget rollups, goal progress, report aggregation
     types.ts      entities + the Repository interface
   data/        repository implementations (in-memory today, SQLite next) and fixtures
   stores/      Pinia store — the only thing views talk to

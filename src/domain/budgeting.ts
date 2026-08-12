@@ -1,6 +1,5 @@
 /**
- * Derived money logic: budget rollups, goal progress, payday allocation, report
- * aggregation.
+ * Derived money logic: budget rollups, goal progress, report aggregation.
  *
  * Nothing here reads or writes storage — these are pure functions over records the
  * repository returned. That keeps them trivially unit-testable against the mock layer and
@@ -24,7 +23,6 @@ import {
   shiftPeriod,
 } from './period'
 import type {
-  AllocationLine,
   Budget,
   BudgetStatus,
   Category,
@@ -254,43 +252,6 @@ export function periodsBetween(from: string, to: string, config: BudgetPeriodCon
   const period = periodFor(from, config)
   const lengthDays = daysBetween(period.start, period.end) + 1
   return Math.max(0, Math.floor(daysBetween(from, to) / lengthDays))
-}
-
-// ---------------------------------------------------------------------------
-// Payday allocation
-// ---------------------------------------------------------------------------
-
-export interface ResolvedAllocationLine {
-  readonly line: AllocationLine
-  readonly amount: Money
-}
-
-export interface ResolvedAllocation {
-  readonly lines: ResolvedAllocationLine[]
-  readonly allocated: Money
-  /** Net pay minus everything allocated. Negative means the plan overcommits. */
-  readonly remainder: Money
-  readonly overcommitted: boolean
-}
-
-/**
- * Turn a plan into concrete amounts against a specific net pay.
- *
- * Percentage lines resolve against net pay at this moment, which is why a template stays
- * correct after a raise: "10% to savings" grows with the salary while "950 to rent" does not.
- */
-export function resolveAllocation(net: Money, lines: readonly AllocationLine[]): ResolvedAllocation {
-  const resolved = lines.map((line) => {
-    const amount =
-      line.mode === 'percent'
-        ? money(Math.round((net.minor * (line.percent ?? 0)) / 100), net.currency)
-        : (line.fixedAmount ?? zero(net.currency))
-    return { line, amount: money(amount.minor, net.currency) }
-  })
-
-  const allocated = sum(resolved.map((r) => r.amount), net.currency)
-  const remainder = subtract(net, allocated)
-  return { lines: resolved, allocated, remainder, overcommitted: remainder.minor < 0 }
 }
 
 // ---------------------------------------------------------------------------

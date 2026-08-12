@@ -261,7 +261,7 @@ async function resetEmpty(): Promise<void> {
       <IonAlert
         :is-open="currencyAlertOpen"
         header="Change main currency?"
-        :message="`Budget limits, goal targets and allocations were entered as ${store.base} figures. They keep their numeric values and will now read as ${pendingCurrency ?? ''}. Wallet balances and past transactions are unaffected.`"
+        :message="`Budget limits and goal targets were entered as ${store.base} figures. They keep their numeric values and will now read as ${pendingCurrency ?? ''}. Wallet balances and past transactions are unaffected.`"
         :buttons="[
           { text: 'Cancel', role: 'cancel' },
           { text: 'Change', role: 'confirm', handler: confirmCurrencyChange },

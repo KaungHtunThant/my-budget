@@ -94,64 +94,9 @@ export interface Transaction {
   note: string
   /** Set when generated from a recurring rule, so it can be traced back. */
   recurringRuleId: Id | null
-  /** Set when this transaction is the income side of a recorded payslip. */
-  payslipId: Id | null
   /** Set when this transaction is a contribution to a savings goal. */
   goalId: Id | null
   createdAt: string
-}
-
-// ---------------------------------------------------------------------------
-// Salary
-// ---------------------------------------------------------------------------
-
-export interface PayslipDeduction {
-  readonly id: Id
-  label: string
-  amount: Money
-}
-
-export interface Payslip {
-  readonly id: Id
-  employer: string
-  /** Date the pay landed. */
-  date: string
-  /** Period the pay covers, for the history list. */
-  periodLabel: string
-  gross: Money
-  deductions: PayslipDeduction[]
-  /** gross − Σ deductions, stored rather than derived so an odd payslip can be recorded verbatim. */
-  net: Money
-  /** Wallet the net pay was paid into. */
-  walletId: Id
-  note: string
-  createdAt: string
-}
-
-/** One line of a payday split: money moved from net pay into a budget or a goal. */
-export interface AllocationLine {
-  readonly id: Id
-  /** Exactly one of these is set. */
-  categoryId: Id | null
-  goalId: Id | null
-  /** Fixed amount, or a percentage of net pay resolved at allocation time. */
-  mode: 'fixed' | 'percent'
-  fixedAmount: Money | null
-  percent: number | null
-}
-
-export interface Allocation {
-  readonly id: Id
-  payslipId: Id
-  lines: AllocationLine[]
-  createdAt: string
-}
-
-/** A reusable payday split, so the same plan need not be re-entered each month. */
-export interface AllocationTemplate {
-  readonly id: Id
-  name: string
-  lines: AllocationLine[]
 }
 
 // ---------------------------------------------------------------------------
@@ -264,7 +209,6 @@ export interface Settings {
 export type NewWallet = Omit<Wallet, 'id' | 'createdAt'>
 export type NewCategory = Omit<Category, 'id'>
 export type NewTransaction = Omit<Transaction, 'id' | 'createdAt'>
-export type NewPayslip = Omit<Payslip, 'id' | 'createdAt'>
 export type NewSavingsGoal = Omit<SavingsGoal, 'id' | 'createdAt'>
 export type NewBudget = Omit<Budget, 'id'>
 export type NewRecurringRule = Omit<RecurringRule, 'id'>
@@ -312,21 +256,6 @@ export interface Repository {
   createTransaction(tx: NewTransaction): Promise<Transaction>
   updateTransaction(tx: Transaction): Promise<Transaction>
   deleteTransaction(id: Id): Promise<void>
-
-  listPayslips(): Promise<Payslip[]>
-  getPayslip(id: Id): Promise<Payslip | null>
-  createPayslip(payslip: NewPayslip): Promise<Payslip>
-  updatePayslip(payslip: Payslip): Promise<Payslip>
-  deletePayslip(id: Id): Promise<void>
-
-  listAllocations(payslipId?: Id): Promise<Allocation[]>
-  createAllocation(allocation: Omit<Allocation, 'id' | 'createdAt'>): Promise<Allocation>
-  deleteAllocation(id: Id): Promise<void>
-
-  listAllocationTemplates(): Promise<AllocationTemplate[]>
-  createAllocationTemplate(template: Omit<AllocationTemplate, 'id'>): Promise<AllocationTemplate>
-  updateAllocationTemplate(template: AllocationTemplate): Promise<AllocationTemplate>
-  deleteAllocationTemplate(id: Id): Promise<void>
 
   listBudgets(includeArchived?: boolean): Promise<Budget[]>
   createBudget(budget: NewBudget): Promise<Budget>

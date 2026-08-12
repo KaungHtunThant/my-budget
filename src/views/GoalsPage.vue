@@ -8,7 +8,6 @@
  */
 import { computed, ref } from 'vue'
 import {
-  IonBackButton,
   IonButton,
   IonButtons,
   IonContent,
@@ -143,9 +142,6 @@ async function contribute(): Promise<void> {
   <IonPage>
     <IonHeader :translucent="true">
       <IonToolbar>
-        <IonButtons slot="start">
-          <IonBackButton default-href="/tabs/more" />
-        </IonButtons>
         <IonTitle>Savings goals</IonTitle>
       </IonToolbar>
     </IonHeader>
@@ -155,7 +151,7 @@ async function contribute(): Promise<void> {
         v-if="store.goalStatusList.length === 0"
         :icon="trophyOutline"
         title="No goals yet"
-        message="Set a target and a date, then contribute to it directly or from each payday's allocation."
+        message="Set a target and a date, then contribute to it whenever you have money spare."
         action-label="Add a goal"
         @action="openNew"
       />

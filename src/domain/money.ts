@@ -81,7 +81,7 @@ export function multiply(m: Money, factor: number): Money {
   return { minor: Math.round(m.minor * factor), currency: m.currency }
 }
 
-/** Apply a percentage, e.g. `percentOf(salary, 30)` for a 30% allocation. */
+/** Apply a percentage, e.g. `percentOf(total, 30)` for 30% of a figure. */
 export function percentOf(m: Money, percent: number): Money {
   return { minor: Math.round((m.minor * percent) / 100), currency: m.currency }
 }

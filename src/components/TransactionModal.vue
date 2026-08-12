@@ -146,7 +146,11 @@ watch(walletId, () => {
 })
 
 watch(type, () => {
-  categoryId.value = null
+  // Drop the category only when it cannot belong to the new type. Clearing it
+  // unconditionally would wipe the category of any income transaction being edited:
+  // `load()` assigns the type first, and this watcher runs after it.
+  const stillValid = availableCategories.value.some((c) => c.id === categoryId.value)
+  if (!stillValid) categoryId.value = null
   if (type.value !== 'transfer') toWalletId.value = null
 })
 
@@ -221,7 +225,6 @@ async function save(): Promise<void> {
       date: date.value.slice(0, 10),
       note: note.value.trim(),
       recurringRuleId: props.transaction?.recurringRuleId ?? null,
-      payslipId: props.transaction?.payslipId ?? null,
       goalId: props.transaction?.goalId ?? null,
     }
 

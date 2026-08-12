@@ -15,11 +15,8 @@ import { type CurrencyCode } from '@/domain/currency'
 import { fromMajor, type Money } from '@/domain/money'
 import { addDays, addMonths, DEFAULT_PERIOD_CONFIG, todayIso } from '@/domain/period'
 import type {
-  Allocation,
-  AllocationTemplate,
   Budget,
   Category,
-  Payslip,
   RecurringRule,
   SavingsGoal,
   Settings,
@@ -32,9 +29,6 @@ export interface SeedData {
   wallets: Wallet[]
   categories: Category[]
   transactions: Transaction[]
-  payslips: Payslip[]
-  allocations: Allocation[]
-  templates: AllocationTemplate[]
   budgets: Budget[]
   rules: RecurringRule[]
   goals: SavingsGoal[]
@@ -83,9 +77,6 @@ export function buildSeed(
       categories,
       wallets: [],
       transactions: [],
-      payslips: [],
-      allocations: [],
-      templates: [],
       budgets: [],
       rules: [],
       goals: [],
@@ -187,54 +178,10 @@ function buildDemo(base: CurrencyCode, categories: Category[], settings: Setting
   ]
 
   // Pay lands on the 25th. Anchor to the most recent 25th that has already happened, so the
-  // demo never shows a payslip dated in the future.
+  // demo never shows income dated in the future.
   const thisMonth25 = `${today.slice(0, 8)}25`
   const lastPayday = today >= thisMonth25 ? thisMonth25 : addMonths(thisMonth25, -1)
-
-  const payslips: Payslip[] = [0, 1, 2].map((monthsAgo) => {
-    const date = addMonths(lastPayday, -monthsAgo)
-    const gross = m(4200)
-    const deductions = [
-      { id: `ded_tax_${monthsAgo}`, label: 'Income tax', amount: m(630) },
-      { id: `ded_social_${monthsAgo}`, label: 'Social security', amount: m(294) },
-      { id: `ded_pension_${monthsAgo}`, label: 'Pension', amount: m(210) },
-    ]
-    return {
-      id: `pay_${monthsAgo}`,
-      employer: 'Acme Corp',
-      date,
-      periodLabel: monthLabel(date),
-      gross,
-      deductions,
-      net: m(3066),
-      walletId: 'wal_bank',
-      note: '',
-      createdAt: date,
-    }
-  })
-
-  const templates: AllocationTemplate[] = [
-    {
-      id: 'tpl_standard',
-      name: 'Standard payday',
-      lines: [
-        { id: 'ln_rent', categoryId: catId('Rent'), goalId: null, mode: 'fixed', fixedAmount: m(950), percent: null },
-        { id: 'ln_grocery', categoryId: catId('Groceries'), goalId: null, mode: 'fixed', fixedAmount: m(400), percent: null },
-        { id: 'ln_util', categoryId: catId('Utilities'), goalId: null, mode: 'fixed', fixedAmount: m(150), percent: null },
-        { id: 'ln_emergency', categoryId: null, goalId: 'gol_emergency', mode: 'percent', fixedAmount: null, percent: 10 },
-        { id: 'ln_laptop', categoryId: null, goalId: 'gol_laptop', mode: 'fixed', fixedAmount: m(150), percent: null },
-      ],
-    },
-  ]
-
-  const allocations: Allocation[] = [
-    {
-      id: 'alc_current',
-      payslipId: 'pay_0',
-      lines: templates[0].lines.map((l) => ({ ...l, id: `${l.id}_a` })),
-      createdAt: payslips[0].date,
-    },
-  ]
+  const paydays = [0, 1, 2].map((monthsAgo) => addMonths(lastPayday, -monthsAgo))
 
   const rules: RecurringRule[] = [
     {
@@ -337,29 +284,27 @@ function buildDemo(base: CurrencyCode, categories: Category[], settings: Setting
       date: addDays(today, -daysAgo),
       note,
       recurringRuleId: null,
-      payslipId: null,
       goalId: null,
       createdAt: addDays(today, -daysAgo),
     })
   })
 
-  // Salary income, one per payslip.
-  payslips.forEach((p, i) => {
+  // Monthly salary, recorded like any other income.
+  paydays.forEach((date, i) => {
     transactions.push({
       id: `txn_sal_${i}`,
       type: 'income',
-      amount: p.net,
+      amount: m(3066),
       fx: null,
-      walletId: p.walletId,
+      walletId: 'wal_bank',
       toWalletId: null,
       toAmount: null,
       categoryId: catId('Salary'),
-      date: p.date,
-      note: `${p.employer} — ${p.periodLabel}`,
+      date,
+      note: `Acme Corp — ${monthLabel(date)}`,
       recurringRuleId: null,
-      payslipId: p.id,
       goalId: null,
-      createdAt: p.date,
+      createdAt: date,
     })
   })
 
@@ -376,7 +321,6 @@ function buildDemo(base: CurrencyCode, categories: Category[], settings: Setting
     date: addDays(today, -13),
     note: `Online order in ${foreign}`,
     recurringRuleId: null,
-    payslipId: null,
     goalId: null,
     createdAt: addDays(today, -13),
   })
@@ -394,7 +338,6 @@ function buildDemo(base: CurrencyCode, categories: Category[], settings: Setting
     date: addDays(today, -20),
     note: `Top up ${foreign} account`,
     recurringRuleId: null,
-    payslipId: null,
     goalId: null,
     createdAt: addDays(today, -20),
   })
@@ -420,7 +363,6 @@ function buildDemo(base: CurrencyCode, categories: Category[], settings: Setting
       date: addDays(today, -daysAgo),
       note: goalId === 'gol_emergency' ? 'Emergency fund' : 'Laptop fund',
       recurringRuleId: null,
-      payslipId: null,
       goalId,
       createdAt: addDays(today, -daysAgo),
     })
@@ -436,9 +378,6 @@ function buildDemo(base: CurrencyCode, categories: Category[], settings: Setting
     wallets,
     categories,
     transactions,
-    payslips,
-    allocations,
-    templates,
     budgets,
     rules,
     goals,

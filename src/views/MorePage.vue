@@ -21,7 +21,6 @@ import {
   pricetagsOutline,
   repeatOutline,
   settingsOutline,
-  trophyOutline,
 } from 'ionicons/icons'
 import { useBudgetStore } from '@/stores/budget'
 
@@ -30,7 +29,6 @@ const store = useBudgetStore()
 const links = [
   { path: '/wallets', icon: cardOutline, title: 'Wallets', detail: 'Accounts, cash and savings' },
   { path: '/categories', icon: pricetagsOutline, title: 'Categories', detail: 'Income and spending categories' },
-  { path: '/goals', icon: trophyOutline, title: 'Savings goals', detail: 'Targets and progress' },
   { path: '/recurring', icon: repeatOutline, title: 'Recurring', detail: 'Bills and regular income' },
   { path: '/reports', icon: barChartOutline, title: 'Reports', detail: 'Trends and category breakdown' },
   { path: '/currencies', icon: cashOutline, title: 'Currencies & rates', detail: 'Manual exchange rates' },

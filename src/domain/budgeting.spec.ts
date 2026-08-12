@@ -5,13 +5,12 @@ import {
   budgetTotals,
   goalStatus,
   periodSummary,
-  resolveAllocation,
   spendByCategory,
   toBase,
 } from './budgeting'
 import { fromMajor } from './money'
 import { periodFor } from './period'
-import type { AllocationLine, Budget, Category, SavingsGoal, Transaction } from './types'
+import type { Budget, Category, SavingsGoal, Transaction } from './types'
 
 const USD: BaseContext = { base: 'USD', rates: { EUR: 1.08 } }
 const MONTH = { type: 'calendar-month' } as const
@@ -42,7 +41,6 @@ function expense(amount: number, date: string, categoryId: string, currency = 'U
     date,
     note: '',
     recurringRuleId: null,
-    payslipId: null,
     goalId: null,
     createdAt: date,
   }
@@ -193,52 +191,6 @@ describe('budgetTotals', () => {
     expect(totals.budgeted).toEqual(fromMajor(500, 'USD'))
     expect(totals.spent).toEqual(fromMajor(270, 'USD'))
     expect(totals.overspentCount).toBe(1)
-  })
-})
-
-describe('resolveAllocation', () => {
-  const net = fromMajor(3000, 'USD')
-
-  const line = (over: Partial<AllocationLine>): AllocationLine => ({
-    id: 'ln',
-    categoryId: null,
-    goalId: null,
-    mode: 'fixed',
-    fixedAmount: null,
-    percent: null,
-    ...over,
-  })
-
-  it('resolves fixed and percentage lines against net pay', () => {
-    const result = resolveAllocation(net, [
-      line({ id: 'a', mode: 'fixed', fixedAmount: fromMajor(950, 'USD') }),
-      line({ id: 'b', mode: 'percent', percent: 10 }),
-    ])
-    expect(result.lines[0].amount).toEqual(fromMajor(950, 'USD'))
-    expect(result.lines[1].amount).toEqual(fromMajor(300, 'USD'))
-    expect(result.allocated).toEqual(fromMajor(1250, 'USD'))
-    expect(result.remainder).toEqual(fromMajor(1750, 'USD'))
-    expect(result.overcommitted).toBe(false)
-  })
-
-  it('percentage lines grow with a raise while fixed lines do not', () => {
-    const lines = [
-      line({ id: 'rent', mode: 'fixed', fixedAmount: fromMajor(950, 'USD') }),
-      line({ id: 'save', mode: 'percent', percent: 10 }),
-    ]
-    const before = resolveAllocation(fromMajor(3000, 'USD'), lines)
-    const after = resolveAllocation(fromMajor(3600, 'USD'), lines)
-    expect(before.lines[0].amount).toEqual(after.lines[0].amount)
-    expect(after.lines[1].amount).toEqual(fromMajor(360, 'USD'))
-  })
-
-  it('flags a plan that commits more than net pay', () => {
-    const result = resolveAllocation(net, [
-      line({ id: 'a', mode: 'fixed', fixedAmount: fromMajor(2000, 'USD') }),
-      line({ id: 'b', mode: 'fixed', fixedAmount: fromMajor(1500, 'USD') }),
-    ])
-    expect(result.overcommitted).toBe(true)
-    expect(result.remainder.minor).toBe(fromMajor(-500, 'USD').minor)
   })
 })
 

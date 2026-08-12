@@ -166,23 +166,6 @@ async function refresh(event: CustomEvent): Promise<void> {
           </p>
         </div>
 
-        <!-- Unallocated pay -->
-        <div v-if="store.payslips.length" class="app-card allocation-card">
-          <div class="app-row-split">
-            <span class="app-muted">Pay not yet allocated</span>
-            <MoneyText :value="store.unallocated" :colored="true" />
-          </div>
-          <IonButton
-            size="small"
-            fill="clear"
-            class="allocation-card__link"
-            @click="router.push('/tabs/salary')"
-          >
-            Plan this payday
-            <IonIcon slot="end" :icon="arrowForwardOutline" />
-          </IonButton>
-        </div>
-
         <!-- Budgets -->
         <template v-if="topBudgets.length">
           <div class="app-section-title">Budgets</div>
@@ -264,7 +247,7 @@ async function refresh(event: CustomEvent): Promise<void> {
               :key="status.goal.id"
               class="goal-row"
               type="button"
-              @click="router.push('/goals')"
+              @click="router.push('/tabs/goals')"
             >
               <div class="app-row-split">
                 <span>{{ status.goal.name }}</span>
@@ -399,17 +382,6 @@ async function refresh(event: CustomEvent): Promise<void> {
 .cycle-days {
   margin: 8px 0 0;
   font-size: 0.78rem;
-}
-
-.allocation-card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.allocation-card__link {
-  align-self: flex-start;
-  margin: 0 0 -6px -8px;
 }
 
 .budget-total {

@@ -197,7 +197,6 @@ async function addNow(rule: RecurringRule): Promise<void> {
     date: todayIso(),
     note: rule.name,
     recurringRuleId: rule.id,
-    payslipId: null,
     goalId: null,
   })
 }

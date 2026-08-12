@@ -11,20 +11,16 @@
  */
 
 import {
-  type Allocation,
-  type AllocationTemplate,
   type Budget,
   type Category,
   type CategoryKind,
   type Id,
   type NewBudget,
   type NewCategory,
-  type NewPayslip,
   type NewRecurringRule,
   type NewSavingsGoal,
   type NewTransaction,
   type NewWallet,
-  type Payslip,
   type RecurringRule,
   type Repository,
   type SavingsGoal,
@@ -44,9 +40,6 @@ export class MemoryRepository implements Repository {
   private wallets: Wallet[] = []
   private categories: Category[] = []
   private transactions: Transaction[] = []
-  private payslips: Payslip[] = []
-  private allocations: Allocation[] = []
-  private templates: AllocationTemplate[] = []
   private budgets: Budget[] = []
   private rules: RecurringRule[] = []
   private goals: SavingsGoal[] = []
@@ -75,9 +68,6 @@ export class MemoryRepository implements Repository {
     this.wallets = clone(seed.wallets)
     this.categories = clone(seed.categories)
     this.transactions = clone(seed.transactions)
-    this.payslips = clone(seed.payslips)
-    this.allocations = clone(seed.allocations)
-    this.templates = clone(seed.templates)
     this.budgets = clone(seed.budgets)
     this.rules = clone(seed.rules)
     this.goals = clone(seed.goals)
@@ -228,71 +218,6 @@ export class MemoryRepository implements Repository {
 
   async deleteTransaction(id: Id): Promise<void> {
     this.transactions = this.transactions.filter((t) => t.id !== id)
-  }
-
-  // -------------------------------------------------------------------------
-  // Payslips and allocations
-  // -------------------------------------------------------------------------
-
-  async listPayslips(): Promise<Payslip[]> {
-    return clone([...this.payslips].sort((a, b) => b.date.localeCompare(a.date)))
-  }
-
-  async getPayslip(id: Id): Promise<Payslip | null> {
-    const found = this.payslips.find((p) => p.id === id)
-    return found ? clone(found) : null
-  }
-
-  async createPayslip(payslip: NewPayslip): Promise<Payslip> {
-    const created: Payslip = { ...clone(payslip), id: newId('pay'), createdAt: nowIso() }
-    this.payslips.push(created)
-    return clone(created)
-  }
-
-  async updatePayslip(payslip: Payslip): Promise<Payslip> {
-    this.payslips = this.payslips.map((p) => (p.id === payslip.id ? clone(payslip) : p))
-    return clone(payslip)
-  }
-
-  async deletePayslip(id: Id): Promise<void> {
-    this.payslips = this.payslips.filter((p) => p.id !== id)
-    this.allocations = this.allocations.filter((a) => a.payslipId !== id)
-    this.transactions = this.transactions.filter((t) => t.payslipId !== id)
-  }
-
-  async listAllocations(payslipId?: Id): Promise<Allocation[]> {
-    return clone(this.allocations.filter((a) => (payslipId ? a.payslipId === payslipId : true)))
-  }
-
-  async createAllocation(allocation: Omit<Allocation, 'id' | 'createdAt'>): Promise<Allocation> {
-    const created: Allocation = { ...clone(allocation), id: newId('alc'), createdAt: nowIso() }
-    this.allocations.push(created)
-    return clone(created)
-  }
-
-  async deleteAllocation(id: Id): Promise<void> {
-    this.allocations = this.allocations.filter((a) => a.id !== id)
-  }
-
-  async listAllocationTemplates(): Promise<AllocationTemplate[]> {
-    return clone(this.templates)
-  }
-
-  async createAllocationTemplate(
-    template: Omit<AllocationTemplate, 'id'>,
-  ): Promise<AllocationTemplate> {
-    const created: AllocationTemplate = { ...clone(template), id: newId('tpl') }
-    this.templates.push(created)
-    return clone(created)
-  }
-
-  async updateAllocationTemplate(template: AllocationTemplate): Promise<AllocationTemplate> {
-    this.templates = this.templates.map((t) => (t.id === template.id ? clone(template) : t))
-    return clone(template)
-  }
-
-  async deleteAllocationTemplate(id: Id): Promise<void> {
-    this.templates = this.templates.filter((t) => t.id !== id)
   }
 
   // -------------------------------------------------------------------------

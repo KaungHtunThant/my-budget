@@ -17,13 +17,15 @@ const routes: RouteRecordRaw[] = [
       { path: 'home', component: () => import('@/views/HomePage.vue') },
       { path: 'transactions', component: () => import('@/views/TransactionsPage.vue') },
       { path: 'budgets', component: () => import('@/views/BudgetsPage.vue') },
-      { path: 'salary', component: () => import('@/views/SalaryPage.vue') },
+      { path: 'goals', component: () => import('@/views/GoalsPage.vue') },
       { path: 'more', component: () => import('@/views/MorePage.vue') },
+      // A retired tab URL (or any typo) lands on Home rather than leaving the outlet
+      // showing the previous page under a tab that no longer exists.
+      { path: ':pathMatch(.*)', redirect: '/tabs/home' },
     ],
   },
   { path: '/wallets', component: () => import('@/views/WalletsPage.vue') },
   { path: '/categories', component: () => import('@/views/CategoriesPage.vue') },
-  { path: '/goals', component: () => import('@/views/GoalsPage.vue') },
   { path: '/recurring', component: () => import('@/views/RecurringPage.vue') },
   { path: '/reports', component: () => import('@/views/ReportsPage.vue') },
   { path: '/settings', component: () => import('@/views/SettingsPage.vue') },

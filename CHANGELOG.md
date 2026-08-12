@@ -6,6 +6,30 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- **Salary & payslips**, and the payday allocation that depended on it. Gross pay, itemised
+  deductions, payslip history, allocation lines and allocation templates are all gone, along
+  with the Salary tab and the "Pay not yet allocated" card on the dashboard. Pay is now
+  recorded as an ordinary income transaction in Activity, against the `Salary` category.
+  Budgets already express the per-category plan, and goals take contributions directly, so
+  the allocation layer earned nothing it did not also complicate.
+
+### Changed
+
+- Savings goals moved from the "More" menu into the tab bar, taking the freed slot:
+  Home, Activity, Budgets, Goals, More.
+- Onboarding controls are pinned to the bottom of the screen as one fixed bar, with the step
+  indicators above them, and the page carries more top and bottom padding.
+
+### Fixed
+
+- Editing an income transaction no longer silently clears its category. The type watcher ran
+  after the form loaded and wiped any category that had been set, because loading an income
+  row moves `type` off its `expense` default.
+
+### Planned
+
 Stage 2 — see [`docs/PLAN.md`](docs/PLAN.md) for the plan.
 
 - Persistence with SQLite behind the existing `Repository` interface
