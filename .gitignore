@@ -35,3 +35,4 @@ android/app/src/main/assets/capacitor.plugins.json
 # AI and MCP
 CLAUDE.md
 .serena
+.claude
