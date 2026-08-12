@@ -6,6 +6,34 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Data survives closing the app.** IndexedDB (via `dexie`) is the store of record, behind the
+  same `Repository` interface the prototype used — the cut-over was one line in
+  `src/stores/repository.ts` and no view changed. Indexes on `date`, `walletId`, `toWalletId`,
+  `categoryId` and `goalId`; `walletBalance()` now uses two of them instead of scanning every
+  transaction once per wallet.
+- **JSON snapshot file** as the durability backstop and the export payload, written via
+  `@capacitor/filesystem` with temp-then-rename and a `.bak`, debounced and flushed when the app
+  is backgrounded. If the object stores ever come up empty, `init()` rebuilds from the file
+  instead of starting the user over. Verified by wiping every store and reloading.
+- **Repository contract suite** — 35 assertions run identically against `MemoryRepository` and
+  `IndexedDbRepository`, which is what makes the swap provably behaviour-preserving. Includes a
+  regression test for the Vue-proxy clone trap. `fake-indexeddb` lets the real Dexie path run
+  under Vitest. Test count: 63 → 109.
+
+### Changed
+
+- **Storage is IndexedDB, not SQLite** — the plan's original choice, reversed now that Stage 1
+  showed nothing above the repository issues a query. Rationale, trade-offs and measurements in
+  [`docs/adr-001-document-store.md`](docs/adr-001-document-store.md).
+- `MemoryRepository` is no longer the app's store; it is the reference implementation the
+  contract tests measure against, and its behaviour is now a specification.
+- Recurring rules and savings goals are listed by name, matching how wallets and categories
+  already were. Previously insertion-ordered, which no longer means anything once records are
+  loaded from a store rather than a fixture.
+- `Repository` gained one optional method, `saveSnapshot?()`, for flushing on background.
+
 ### Removed
 
 - **Salary & payslips**, and the payday allocation that depended on it. Gross pay, itemised
@@ -30,12 +58,14 @@ All notable changes to this project are recorded here. The format follows
 
 ### Planned
 
-Stage 2 — see [`docs/PLAN.md`](docs/PLAN.md) for the plan.
+Remainder of Stage 2 — see [`docs/PLAN.md`](docs/PLAN.md).
 
-- Persistence with SQLite behind the existing `Repository` interface
-- Local backup export/import, then optional Google Drive sync
+- Backup UI: share/save the snapshot, import with merge-or-replace, optional passphrase
+  encryption (the payload and file format already exist)
 - App lock with fingerprint or PIN
 - Automatic generation of recurring transactions on their due date
+- Optional Google Drive sync, uploading the same payload
+- On-device scale pass: the eager full-collection load, not the store, is what should bind first
 
 ## [1.0.0] — 2026-08-11
 

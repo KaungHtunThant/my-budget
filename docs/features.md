@@ -15,9 +15,9 @@ IDs are stable and are never renumbered, so a removed item simply leaves a gap.
 | `Stub` | Visible in the app but deliberately inert — a placeholder for a later build. |
 | `Planned` | Named in the plan, absent from the app. |
 
-**Standing limitation.** Nothing persists across a reload today. Every `Built` item below works
-only until the app restarts — persistence is the next stage, and is what this pruning decides
-the size of.
+**~~Standing limitation.~~ Resolved 2026-08-12.** Data now survives a restart: IndexedDB is the
+store of record, with a JSON snapshot file as the durability backstop. Every `Built` item below
+persists. See [`adr-001-document-store.md`](adr-001-document-store.md).
 
 ---
 
@@ -358,7 +358,7 @@ ship at all. Decide their fate rather than inheriting them.
 | 16.7 | Four cycle shapes, all producing a date range budgets and reports filter on | Built |
 | 16.8 | Cycle rollover of unspent budget room, computed across past cycles | Built |
 | 16.9 | Dates held as plain calendar dates with no timezone, so the 3rd is the 3rd anywhere | Built |
-| 16.10 | 63 unit tests over money, rates, cycles and budget rollups | Built |
+| 16.10 | 109 unit tests over money, rates, cycles, budget rollups, the repository contract and the snapshot file | Built |
 
 **Nothing here is proposed for removal** — this is the layer the plan deliberately built early
 because it is expensive to retrofit. Listed so it is visible when scoping the database work.
@@ -369,15 +369,16 @@ because it is expensive to retrofit. Listed so it is visible when scoping the da
 
 | ID | Function point | Status |
 |---|---|---|
-| 17.1 | Data survives closing the app | Planned |
-| 17.2 | Export to a single portable file, and import it back | Planned |
+| 17.1 | Data survives closing the app | **Built** |
+| 17.2 | Export to a single portable file, and import it back | Partly built — the file and its payload exist; the share/import UI does not |
 | 17.3 | Optional passphrase encryption on the export | Planned |
 | 17.4 | Google Drive backup, manual and optionally periodic | Planned |
 | 17.5 | App lock with fingerprint or PIN at launch | Planned |
 | 17.6 | Automatic generation of recurring transactions on their due date | Planned |
 
-17.1 is the whole point of the next stage; the rest are the plan's later milestones. Reorder or
-cut these too — they are as much in scope for this review as the built features.
+17.1 landed with the move to IndexedDB. 17.2 is now the smallest remaining item rather than a
+milestone of its own: the snapshot written for durability is already the portable file, so what
+is left is letting the user send it somewhere and read one back. The rest are unchanged.
 
 ---
 

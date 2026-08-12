@@ -6,8 +6,11 @@
  * instead, which reads through proxies transparently and yields plain objects.
  *
  * Domain records are deliberately JSON-shaped — strings, numbers, booleans, null, arrays
- * and plain objects — so a structural walk is sufficient and will keep working unchanged
- * when the SQLite repository serialises the same records.
+ * and plain objects — so a structural walk is sufficient.
+ *
+ * This is now load-bearing rather than defensive: IndexedDB serialises with the structured
+ * clone algorithm, which rejects proxies outright, so every repository write runs through
+ * here first. A shallow spread is not enough — nested money objects stay proxied.
  */
 export function deepClone<T>(value: T): T {
   if (value === null || typeof value !== 'object') return value

@@ -8,9 +8,11 @@ Everything lives on the device. The app makes no network requests — even its i
 fonts are bundled — and the only planned online feature is an optional Google Drive backup,
 which comes after a local file backup.
 
-**Current status: Stage 1 prototype.** Every screen is built and interactive against
-realistic in-memory data. Nothing persists across a reload yet; the database, backup and
-Drive sync are Stage 2. See [`docs/PLAN.md`](docs/PLAN.md) for the full plan.
+**Current status: Stage 2, persistence landed.** Every screen is built, and data now survives
+a restart — IndexedDB is the store of record, with a JSON snapshot file as the durability
+backstop and the export payload. Still to come: the backup/restore UI, app lock, and Drive
+sync. See [`docs/PLAN.md`](docs/PLAN.md) for the plan and
+[`docs/features.md`](docs/features.md) for the live scope.
 
 ## Stack
 
@@ -20,7 +22,7 @@ Drive sync are Stage 2. See [`docs/PLAN.md`](docs/PLAN.md) for the full plan.
 | Native shell | Capacitor 7 → Android APK |
 | State | Pinia |
 | Build / test | Vite, Vitest |
-| Storage | In-memory today; SQLite (`@capacitor-community/sqlite`) in Stage 2 |
+| Storage | IndexedDB via `dexie`, plus a JSON snapshot file — see [ADR 001](docs/adr-001-document-store.md) |
 
 ## Getting started
 
@@ -55,7 +57,8 @@ src/
     period.ts     budget cycles (calendar month, payday-anchored, weekly, fortnightly)
     budgeting.ts  budget rollups, goal progress, report aggregation
     types.ts      entities + the Repository interface
-  data/        repository implementations (in-memory today, SQLite next) and fixtures
+  data/        db.ts schema, indexeddb.ts (the store of record), memory.ts (the test
+               double), snapshot.ts (durability backstop + export payload), fixtures
   stores/      Pinia store — the only thing views talk to
   views/       one file per screen
   components/  shared UI (transaction row, currency picker, meters, modals)

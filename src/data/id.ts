@@ -1,9 +1,10 @@
 /**
  * Id generation.
  *
- * Ids are opaque strings so the SQLite layer can keep generating them the same way in
- * Stage 2 without a migration. `crypto.randomUUID` is available in the Android webview
- * and in modern browsers; the counter fallback keeps unit tests working under any runtime.
+ * Ids are opaque strings, which is why the persistent layer generates them exactly as the
+ * prototype did — they are the primary keys of the IndexedDB object stores, assigned here
+ * rather than by the store. `crypto.randomUUID` is available in the Android webview and in
+ * modern browsers; the counter fallback keeps unit tests working under any runtime.
  */
 
 let counter = 0

@@ -1,9 +1,13 @@
 /**
  * Application store.
  *
- * Holds the loaded records and exposes derived views the screens read. All persistence
- * goes through the `Repository` interface, so this file is unchanged when SQLite replaces
- * the in-memory implementation in Stage 2.
+ * Holds the loaded records and exposes derived views the screens read. All persistence goes
+ * through the `Repository` interface, which is why swapping the in-memory implementation for
+ * the persistent one touched a single line in `./repository.ts` and nothing here.
+ *
+ * Note the load pattern: every collection is read in full on `reload()`, and every mutation
+ * calls it again. That is what the screens were built on, and it is fine at the volumes
+ * measured so far — the repository's indexes are there for when it stops being.
  *
  * Loading strategy is deliberately blunt for the prototype: mutations reload the affected
  * collections rather than patching local arrays. With a real database and realistic data
@@ -181,6 +185,14 @@ export const useBudgetStore = defineStore('budget', () => {
       wallets.value.map(async (w) => [w.id, await repo.walletBalance(w.id)] as const),
     )
     balances.value = Object.fromEntries(entries)
+  }
+
+  /**
+   * Push any owed durability snapshot out now. Called when the app is backgrounded, since
+   * Android may not run our code again before killing the process.
+   */
+  async function flushSnapshot(): Promise<void> {
+    await repo.saveSnapshot?.()
   }
 
   // --- settings ------------------------------------------------------------
@@ -421,6 +433,7 @@ export const useBudgetStore = defineStore('budget', () => {
     // actions
     init,
     reload,
+    flushSnapshot,
     saveSettings,
     completeOnboarding,
     resetApp,

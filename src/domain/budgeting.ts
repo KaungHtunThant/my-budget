@@ -2,8 +2,8 @@
  * Derived money logic: budget rollups, goal progress, report aggregation.
  *
  * Nothing here reads or writes storage — these are pure functions over records the
- * repository returned. That keeps them trivially unit-testable against the mock layer and
- * unchanged when the SQLite repository replaces it.
+ * repository returned. That kept them trivially unit-testable with no database present, and
+ * meant not one of them changed when persistence arrived.
  *
  * Multi-currency note: budgets, goals and reports are all expressed in the base currency.
  * A transaction in a foreign-currency wallet needs a rate to be counted. Rather than

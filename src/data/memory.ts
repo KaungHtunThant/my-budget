@@ -1,13 +1,17 @@
 /**
- * In-memory repository — the prototype's data layer.
+ * In-memory repository — now the reference implementation, not the app's store.
  *
- * This exists so every screen can be built and judged against realistic data before any
- * database work begins. It implements the full `Repository` contract, so Stage 2 replaces
- * this file with a SQLite-backed class and nothing above it changes.
+ * It was built so every screen could be judged against realistic data before any database
+ * work began. `IndexedDbRepository` has since taken over as the store of record, and this
+ * class earned a second life as the double that `repository.contract.spec.ts` asserts the
+ * persistent layer against: the same 35 assertions run against both, which is the evidence
+ * that the swap changed nothing a user can see.
  *
- * Deliberate limitation: nothing survives a reload. That is the point of the prototype
- * stage — persistence is Stage 2 (D0–D2), and pretending to persist here would hide the
- * design questions the real database has to answer.
+ * It follows that this file is a specification. Behaviour here — ordering, cascade rules,
+ * archived filtering — is what the persistent layer is required to match, so a change to
+ * one belongs in both.
+ *
+ * Nothing survives a reload, deliberately. That is what makes it a clean-slate test double.
  */
 
 import {
@@ -248,7 +252,11 @@ export class MemoryRepository implements Repository {
   // -------------------------------------------------------------------------
 
   async listRecurringRules(activeOnly = false): Promise<RecurringRule[]> {
-    return clone(this.rules.filter((r) => (activeOnly ? r.active : true)))
+    return clone(
+      this.rules
+        .filter((r) => (activeOnly ? r.active : true))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    )
   }
 
   async createRecurringRule(rule: NewRecurringRule): Promise<RecurringRule> {
@@ -271,7 +279,11 @@ export class MemoryRepository implements Repository {
   // -------------------------------------------------------------------------
 
   async listGoals(includeArchived = false): Promise<SavingsGoal[]> {
-    return clone(this.goals.filter((g) => includeArchived || !g.archived))
+    return clone(
+      this.goals
+        .filter((g) => includeArchived || !g.archived)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    )
   }
 
   async getGoal(id: Id): Promise<SavingsGoal | null> {

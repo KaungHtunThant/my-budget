@@ -10,7 +10,14 @@ The app must be **fully usable offline** — all data lives on the device. The o
 feature is an optional Google Drive backup/restore, which is deliberately deferred to a
 later phase so a working local backup exists first.
 
-This document is the agreed plan. Implementation has not started.
+This document is the agreed plan.
+
+> **Amended 2026-08-12.** Stage 1 shipped, and two decisions recorded below have since changed
+> in light of it. Storage is **IndexedDB plus a JSON snapshot file, not SQLite** — see
+> [`adr-001-document-store.md`](adr-001-document-store.md) for the evidence and the trade. And
+> salary/payslips with payday allocation were **removed** as more machinery than the app needed;
+> pay is recorded as ordinary income. [`features.md`](features.md) is the live scope document.
+> Sections below are marked where they are superseded.
 
 ---
 
@@ -18,12 +25,13 @@ This document is the agreed plan. Implementation has not started.
 
 | Question | Decision |
 |---|---|
-| Scope | Full: salary → budgets → expenses → savings goals |
+| Scope | ~~Full: salary → budgets → expenses → savings goals~~ → income → budgets → expenses → savings goals (salary module removed) |
 | Stack | **Ionic Vue + Capacitor** (Vue 3 + TypeScript, real Android APK) |
 | Currency | **Multi-currency**, no live rates — user enters the rate manually |
 | FX model | Per-currency wallets **and** per-entry conversion |
 | Backup | Local file export/import first; Google Drive later |
 | Build order | **Frontend prototype first**, approved, *then* data layer |
+| Storage | ~~SQLite~~ → **IndexedDB (Dexie) + JSON snapshot file** — see [ADR 001](adr-001-document-store.md) |
 
 ---
 
@@ -32,16 +40,19 @@ This document is the agreed plan. Implementation has not started.
 - **Vue 3 + TypeScript**, Composition API with `<script setup>`
 - **Ionic Framework (Vue)** — mobile UI components, native-feeling navigation, modals, pickers
 - **Capacitor** — packages the web app into a real Android APK, provides native plugins
-- **SQLite** via `@capacitor-community/sqlite` — a genuine on-device relational DB, not
-  browser storage that can be evicted. `jeep-sqlite` provides a browser fallback so the
-  app can be developed and tested in a normal browser without an emulator.
+- **IndexedDB** via `dexie`, with a JSON snapshot file via `@capacitor/filesystem` — no native
+  storage plugin, and the same code path in a browser and on device. Superseded the original
+  SQLite choice once Stage 1 showed nothing above the repository issues a query; see
+  [ADR 001](adr-001-document-store.md).
 - **Pinia** — state management
 - **Vite** — build tooling (Ionic's Vue starter uses it by default)
-- **Vitest + Vue Test Utils** for unit tests
+- **Vitest + Vue Test Utils** for unit tests, with `fake-indexeddb` so the real Dexie code path
+  runs under Node
 
 Rationale: Capacitor keeps the whole app in Vue/TS while still producing an installable
-APK, and the SQLite plugin gives durable storage appropriate for financial records.
-Nothing in the core app makes a network call.
+APK. Storage is durable without a native plugin: the object stores live in the app's private
+webview storage, and the snapshot file in its private data directory is what the app rebuilds
+from if they are ever cleared. Nothing in the core app makes a network call.
 
 ---
 
@@ -57,19 +68,21 @@ Four layers, kept deliberately separate so the Drive phase and any future platfo
 │  Stores (Pinia)                             │  app state, derived totals
 ├─────────────────────────────────────────────┤
 │  Services / domain logic                    │  money math, FX conversion,
-│                                             │  allocation, budget rollups,
+│                                             │  budget rollups,
 │                                             │  backup serialization
 ├─────────────────────────────────────────────┤
-│  Repositories → SQLite (Capacitor plugin)   │  queries + schema migrations
+│  Repositories → IndexedDB (Dexie)           │  object stores + indexes,
+│                 + JSON snapshot file        │  versioned upgrades, backstop
 └─────────────────────────────────────────────┘
 ```
 
 Key rules:
 
-- **Views never touch SQL.** Only repositories issue queries.
-- **The repository layer is an interface, not a class.** This is what makes
-  prototype-first work: the prototype ships a mock in-memory implementation, and the real
-  SQLite implementation is swapped in behind the same interface with no view changes.
+- **Views never touch storage.** Only repositories read and write it.
+- **The repository layer is an interface, not a class.** This is what made prototype-first
+  work: the prototype shipped an in-memory implementation, and the persistent one was swapped
+  in behind the same interface — one line in `src/stores/repository.ts`, no view changes. The
+  in-memory implementation stayed on as the double the contract tests measure against.
 - **Money is never a float.** Amounts are stored as integer minor units (e.g. cents) plus
   a currency code, with per-currency decimal precision. All arithmetic is integer-based.
 - **Backup is a service, not a screen concern.** The same serializer feeds local file
@@ -192,18 +205,25 @@ feels like the finished product, but nothing persists across a restart.
 
 Persistence, then backup, then Drive. The UI should barely change.
 
-| # | Milestone | Outcome |
-|---|---|---|
-| **D0** | SQLite wiring | `@capacitor-community/sqlite` set up, browser fallback for dev, versioned migration framework |
-| **D1** | Schema & repositories | Real tables, real repository implementation replacing the mock, seed/reset tooling |
-| **D2** | Cut over | Prototype swapped onto the real layer, data survives restart, integrity and correctness tests |
-| **D3** | Local backup | Export/import with schema-version validation, merge-or-replace, optional encryption |
-| **D4** | Hardening & release | App lock (biometric/PIN), migration testing, performance on large history, signed release APK |
-| **D5** | Google Drive backup | OAuth sign-in, appDataFolder upload/restore, optional auto-backup |
+D0–D2 were replaced by N0–N3 when storage moved off SQLite ([ADR 001](adr-001-document-store.md)).
+The outcome is the same: data survives restart, behind the unchanged `Repository` interface.
 
-P0–P2 are the critical path for Stage 1: the mock layer's shape determines how painless
-the D2 cut-over is. D3 is worth pulling forward if real data will be entered before the
-app is finished.
+| # | Milestone | Outcome | Status |
+|---|---|---|---|
+| **N0** | Store wiring | `dexie` + `@capacitor/filesystem`, schema v1 with indexes, `fake-indexeddb` in Vitest | Done |
+| **N1** | Repository & contract tests | `IndexedDbRepository` implementing the full interface; one contract suite asserted against it and `MemoryRepository` alike | Done |
+| **N2** | Cut over | One line in `src/stores/repository.ts`; data survives a reload | Done |
+| **N3** | Snapshot backstop | JSON snapshot with temp-then-rename and `.bak`, debounced plus flushed on background, rebuild-on-empty in `init()` | Done |
+| **D3** | Local backup UI | Share/save the snapshot payload, import with merge-or-replace, optional passphrase encryption | Next |
+| **D4** | Hardening & release | App lock (biometric/PIN), upgrade testing, on-device performance on large history, signed release APK |  |
+| **D5** | Google Drive backup | OAuth sign-in, appDataFolder upload/restore, optional auto-backup |  |
+
+N3 delivered the snapshot *format and file*; D3 is the user-facing half — export, share and
+import. That split is why D3 is now small.
+
+**Versioning rule.** `SCHEMA_VERSION` in `src/data/db.ts` is the on-disk contract. Every schema
+change bumps the Dexie version with an `upgrade()` hook, and the snapshot carries the version so
+an import can be transformed forward. A snapshot from a newer schema is refused, not guessed at.
 
 ---
 
@@ -212,9 +232,11 @@ app is finished.
 - **Prototype-to-database drift** is the main risk of building UI first. It is contained
   by writing the repository interface and the real domain types in P2 — if the mock is
   just loose objects invented per screen, the D2 cut-over becomes a rewrite.
-- **SQLite plugin setup** is the fiddliest part of Capacitor: it needs explicit
-  initialisation and a separate browser fallback. Getting D0 right de-risks the rest of
-  Stage 2.
+- ~~**SQLite plugin setup** is the fiddliest part of Capacitor~~ — avoided outright by moving
+  to IndexedDB, which needs no native plugin and no browser fallback. In its place: **webview
+  storage durability**. The object stores are app-private and are not evicted browser-style,
+  but that is the one claim to confirm on a real device rather than assume, which is what the
+  snapshot file and its rebuild-on-empty path exist to make survivable either way.
 - **Android storage permissions** changed significantly in recent versions. Using the
   system share/save sheet rather than direct file paths avoids most of this.
 - **Drive OAuth** requires Google Cloud console setup and the release keystore's SHA-1
@@ -234,19 +256,26 @@ app is finished.
 - **Browser dev loop** — `npm run dev`, click through every screen against seeded fixtures.
 - **On-device review build** — `npx cap run android` on a real phone, plus a shareable
   debug APK, so navigation and form feel are judged on real hardware, not a desktop browser.
-- **Unit tests (Vitest)** — money arithmetic, FX conversion, budget rollups and allocation
-  splits, all testable against the mock layer with no database present.
+- **Unit tests (Vitest)** — money arithmetic, FX conversion, budget rollups, all testable
+  against the in-memory layer with no database present.
 
-**Stage 2 (data)**
+**Stage 2 (data)** — results in [ADR 001](adr-001-document-store.md).
 
-- **Cut-over check** — the same screens and the same tests run unchanged against the real
-  repository; any test that needed rewriting signals leaked abstraction.
-- **Persistence test** — enter data, force-close, reopen, confirm everything survives.
-- **Migration test** — install an older build with data, upgrade, confirm nothing is lost.
-- **Backup round-trip test** — export, wipe app data, reinstall, restore, verify balances
+- **Cut-over check** ✅ — the 63 Stage 1 domain tests passed unchanged against the persistent
+  repository; none needed rewriting, so nothing had leaked.
+- **Contract check** ✅ — one suite of 35 assertions passes identically against
+  `MemoryRepository` and `IndexedDbRepository`.
+- **Persistence test** ✅ in browser — enter data, reload, everything survives. Still to do on
+  device: force-close and reopen.
+- **Backstop test** ✅ — wipe every object store, reload, confirm the app rebuilds from the
+  snapshot rather than starting the user over.
+- **Scale check** ✅ at 20k transactions in Chromium — 147 ms eager read, 18.7 ms for one cycle
+  through the `date` index, ~1.1 s cold boot. Still to do on a mid-range device, where the
+  eager-load path, not the store, is expected to bind first.
+- **Upgrade test** — once a second schema version exists: install with data, upgrade, confirm
+  nothing is lost.
+- **Backup round-trip test** — D3: export, clear app data, reinstall, import, verify balances
   and history match exactly.
-- **Scale check** — seed a few thousand transactions and confirm list and report
-  performance holds in the webview.
 
 ---
 
