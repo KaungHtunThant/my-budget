@@ -31,4 +31,7 @@ android/app/src/main/assets/capacitor.plugins.json
 *.aab
 *.keystore
 !debug.keystore
+
+# AI and MCP
 CLAUDE.md
+.serena
