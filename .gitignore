@@ -31,3 +31,4 @@ android/app/src/main/assets/capacitor.plugins.json
 *.aab
 *.keystore
 !debug.keystore
+CLAUDE.md
