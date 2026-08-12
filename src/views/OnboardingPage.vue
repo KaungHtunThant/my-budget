@@ -11,6 +11,7 @@ import { useRouter } from 'vue-router'
 import {
   IonButton,
   IonContent,
+  IonFooter,
   IonIcon,
   IonInput,
   IonItem,
@@ -76,6 +77,23 @@ const periodConfig = computed<BudgetPeriodConfig>(() => {
 /** Show the user the actual dates their choice produces, not just its name. */
 const periodPreview = computed(() => periodFor(todayIso(), periodConfig.value))
 
+/**
+ * The controls live in one footer rather than one copy per pane, so the bar never moves
+ * between steps. That means the footer, not the pane, decides what the primary button says.
+ */
+const LAST_STEP = 3
+
+const primaryLabel = computed(() => {
+  if (step.value === 0) return 'Get started'
+  if (step.value < LAST_STEP) return 'Continue'
+  return saving.value ? 'Setting up…' : 'Start using My Budget'
+})
+
+function advance(): void {
+  if (step.value < LAST_STEP) next()
+  else void finish()
+}
+
 function next(): void {
   step.value += 1
 }
@@ -112,19 +130,16 @@ async function finish(): Promise<void> {
         <IonIcon :icon="walletOutline" class="pane__icon" />
         <h1 class="pane__title">My Budget</h1>
         <p class="pane__lead">
-          Track your salary, split it into budgets, and watch where it actually goes.
-          Everything stays on this device — no account, no internet needed.
+          Record what comes in and what goes out, set a limit per category, and watch where
+          your money actually goes. Everything stays on this device — no account, no
+          internet needed.
         </p>
         <ul class="feature-list">
-          <li><IonIcon :icon="checkmarkCircle" /> Record payslips and split each payday</li>
+          <li><IonIcon :icon="checkmarkCircle" /> Log income and spending in seconds</li>
           <li><IonIcon :icon="checkmarkCircle" /> Budgets per category, on your own cycle</li>
           <li><IonIcon :icon="checkmarkCircle" /> Multiple currencies, with rates you set</li>
           <li><IonIcon :icon="checkmarkCircle" /> Savings goals with progress tracking</li>
         </ul>
-        <IonButton expand="block" @click="next">
-          Get started
-          <IonIcon slot="end" :icon="arrowForward" />
-        </IonButton>
       </section>
 
       <!-- Step 1: base currency -->
@@ -150,14 +165,6 @@ async function finish(): Promise<void> {
           {{ currencyDef.decimals === 0 ? 'no decimal places' : `${currencyDef.decimals} decimal places` }}.
           Amounts will be entered and shown to match.
         </IonNote>
-
-        <div class="pane__actions">
-          <IonButton fill="clear" @click="back">Back</IonButton>
-          <IonButton expand="block" class="grow" @click="next">
-            Continue
-            <IonIcon slot="end" :icon="arrowForward" />
-          </IonButton>
-        </div>
       </section>
 
       <!-- Step 2: budget period -->
@@ -242,14 +249,6 @@ async function finish(): Promise<void> {
           <strong>{{ periodPreview.label }}</strong>
           <small class="app-muted">{{ describePeriodConfig(periodConfig) }}</small>
         </div>
-
-        <div class="pane__actions">
-          <IonButton fill="clear" @click="back">Back</IonButton>
-          <IonButton expand="block" class="grow" @click="next">
-            Continue
-            <IonIcon slot="end" :icon="arrowForward" />
-          </IonButton>
-        </div>
       </section>
 
       <!-- Step 3: demo data -->
@@ -286,18 +285,7 @@ async function finish(): Promise<void> {
         <IonNote class="pane__note">
           A screen lock using your fingerprint or a PIN is planned for a later build.
         </IonNote>
-
-        <div class="pane__actions">
-          <IonButton fill="clear" @click="back">Back</IonButton>
-          <IonButton expand="block" class="grow" :disabled="saving" @click="finish">
-            {{ saving ? 'Setting up…' : 'Start using My Budget' }}
-          </IonButton>
-        </div>
       </section>
-
-      <div class="dots">
-        <span v-for="i in 4" :key="i" class="dot" :class="{ 'dot--on': i - 1 === step }" />
-      </div>
 
       <IonModal :is-open="pickerOpen" @did-dismiss="pickerOpen = false">
         <CurrencyPicker
@@ -308,6 +296,35 @@ async function finish(): Promise<void> {
         />
       </IonModal>
     </IonContent>
+
+    <IonFooter class="onboarding-footer ion-no-border">
+      <div class="footer-inner">
+        <div class="dots">
+          <span
+            v-for="i in LAST_STEP + 1"
+            :key="i"
+            class="dot"
+            :class="{ 'dot--on': i - 1 === step }"
+          />
+        </div>
+
+        <div class="footer-actions">
+          <IonButton
+            v-if="step > 0"
+            fill="clear"
+            class="footer-actions__back"
+            :disabled="saving"
+            @click="back"
+          >
+            Back
+          </IonButton>
+          <IonButton expand="block" class="grow" :disabled="saving" @click="advance">
+            {{ primaryLabel }}
+            <IonIcon v-if="step < LAST_STEP" slot="end" :icon="arrowForward" />
+          </IonButton>
+        </div>
+      </div>
+    </IonFooter>
   </IonPage>
 </template>
 
@@ -315,14 +332,13 @@ async function finish(): Promise<void> {
 .onboarding {
   --padding-start: 22px;
   --padding-end: 22px;
-  --padding-top: 40px;
-  --padding-bottom: 24px;
+  --padding-top: 72px;
+  --padding-bottom: 40px;
 }
 
 .pane {
   display: flex;
   flex-direction: column;
-  min-height: 78vh;
 }
 
 .pane__icon {
@@ -343,9 +359,17 @@ async function finish(): Promise<void> {
   line-height: 1.55;
 }
 
+/* Rows sit flush with the heading text rather than at Ionic's default item inset. */
 .pane__list {
-  margin: 0 -8px 12px;
+  margin: 0 0 12px;
+  padding: 0;
   background: transparent;
+}
+
+.pane__list ion-item {
+  --background: transparent;
+  --padding-start: 0;
+  --inner-padding-end: 0;
 }
 
 .pane__note {
@@ -355,12 +379,25 @@ async function finish(): Promise<void> {
   margin-bottom: 12px;
 }
 
-.pane__actions {
-  margin-top: auto;
-  padding-top: 24px;
+/* The control bar is pinned below the scrolling panes, so it keeps its own padding and
+   clears the device's bottom inset. */
+.onboarding-footer {
+  background: var(--ion-background-color);
+  border-top: 1px solid var(--app-border);
+}
+
+.footer-inner {
+  padding: 14px 22px calc(34px + var(--ion-safe-area-bottom, 0px));
+}
+
+.footer-actions {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.footer-actions__back {
+  flex-shrink: 0;
 }
 
 .grow {
@@ -369,7 +406,7 @@ async function finish(): Promise<void> {
 
 .feature-list {
   list-style: none;
-  margin: 0 0 auto;
+  margin: 0;
   padding: 0;
   display: grid;
   gap: 14px;
@@ -455,7 +492,7 @@ async function finish(): Promise<void> {
   display: flex;
   justify-content: center;
   gap: 7px;
-  padding: 18px 0 4px;
+  padding: 0 0 14px;
 }
 
 .dot {
