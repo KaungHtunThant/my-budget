@@ -58,23 +58,35 @@ from if they are ever cleared. Nothing in the core app makes a network call.
 
 ## Architecture
 
-Four layers, kept deliberately separate so the Drive phase and any future platform
-(iOS, web) plug in without touching business logic.
+Layers kept deliberately separate so the Drive phase and any future platform (iOS, web) plug in
+without touching business logic. **[`architecture.md`](architecture.md) is the authority** — it
+carries the admission test for each layer and the rules that settle the awkward cases.
 
 ```
 ┌─────────────────────────────────────────────┐
 │  Views (Ionic Vue pages + components)       │  screens, forms, charts
 ├─────────────────────────────────────────────┤
-│  Stores (Pinia)                             │  app state, derived totals
+│  <screen>/utils.ts                          │  one screen's filters, groupings,
+│                                             │  chart geometry, form rules
 ├─────────────────────────────────────────────┤
-│  Services / domain logic                    │  money math, FX conversion,
-│                                             │  budget rollups,
-│                                             │  backup serialization
+│  Services                                   │  rules shared by screens, and every
+│                                             │  builder of a persisted record
+├─────────────────────────────────────────────┤
+│  Domain                                     │  money math, FX conversion,
+│                                             │  period math, budget rollups
+├─────────────────────────────────────────────┤
+│  Stores (Pinia)                             │  loaded records, writes, load
+│                                             │  lifecycle — no calculation
 ├─────────────────────────────────────────────┤
 │  Repositories → IndexedDB (Dexie)           │  object stores + indexes,
 │                 + JSON snapshot file        │  versioned upgrades, backstop
 └─────────────────────────────────────────────┘
 ```
+
+> **Amended 2026-08-20.** The store used to hold derived totals as well as state; the layering
+> refactor moved every calculation out of it and out of the view scripts. What a store may still
+> hold is decided by the SELECT test in [`architecture.md`](architecture.md), and
+> `src/architecture.spec.ts` asserts the import direction rather than leaving it to review.
 
 Key rules:
 
