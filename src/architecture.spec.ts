@@ -152,8 +152,14 @@ describe('the store stays below the UI', () => {
     expect(violations(sourcesIn('stores'), forbidden)).toEqual({})
   })
 
-  // TODO(phase 6): once the rollups have moved out, assert the store does not import
-  // '@/domain/budgeting' either — that import is the proof it still calculates.
+  /**
+   * The store's charter is the SELECT test: a projection, a `WHERE` on a stored field, an
+   * `ORDER BY` or a key lookup. `@/domain/budgeting` is where every rollup lives, so importing it
+   * is the clearest possible evidence the store has started calculating again.
+   */
+  it('imports no rollups — the SELECT test, enforced', () => {
+    expect(violations(sourcesIn('stores'), ['@/domain/budgeting'])).toEqual({})
+  })
 })
 
 describe('store access is confined', () => {

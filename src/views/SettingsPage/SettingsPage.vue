@@ -54,9 +54,12 @@ import {
 import type { ThemePreference } from '@/domain/types'
 import { periodConfigFrom } from '@/services/period'
 import { withBaseCurrency } from '@/services/settings'
+import { currenciesNeedingRates } from '@/services/fx'
 import { useBudgetStore } from '@/stores/budget'
 
 const store = useBudgetStore()
+
+const missingRates = computed(() => currenciesNeedingRates(store.wallets, store.settings))
 const router = useRouter()
 
 const currencyPickerOpen = ref(false)
@@ -154,8 +157,8 @@ async function resetEmpty(): Promise<void> {
               <h3>Currencies &amp; rates</h3>
               <p>{{ store.settings.activeCurrencies.length }} in use</p>
             </IonLabel>
-            <IonNote v-if="store.missingRates.length" slot="end" color="warning">
-              {{ store.missingRates.length }} missing
+            <IonNote v-if="missingRates.length" slot="end" color="warning">
+              {{ missingRates.length }} missing
             </IonNote>
           </IonItem>
           <IonItem button :detail="true" @click="openPeriodModal">

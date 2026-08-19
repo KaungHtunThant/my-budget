@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import {
   IonContent,
   IonHeader,
@@ -22,9 +23,12 @@ import {
   repeatOutline,
   settingsOutline,
 } from 'ionicons/icons'
+import { currenciesNeedingRates } from '@/services/fx'
 import { useBudgetStore } from '@/stores/budget'
 
 const store = useBudgetStore()
+
+const missingRates = computed(() => currenciesNeedingRates(store.wallets, store.settings))
 
 const links = [
   { path: '/wallets', icon: cardOutline, title: 'Wallets', detail: 'Accounts, cash and savings' },
@@ -53,8 +57,8 @@ const links = [
               <h3>{{ link.title }}</h3>
               <p>{{ link.detail }}</p>
             </IonLabel>
-            <IonNote v-if="link.path === '/currencies' && store.missingRates.length" slot="end" color="warning">
-              {{ store.missingRates.length }} missing
+            <IonNote v-if="link.path === '/currencies' && missingRates.length" slot="end" color="warning">
+              {{ missingRates.length }} missing
             </IonNote>
           </IonItem>
         </IonList>

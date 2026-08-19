@@ -20,31 +20,11 @@ import { defineStore } from 'pinia'
 
 import type { CurrencyCode } from '@/domain/currency'
 import { type Money, zero } from '@/domain/money'
-import {
-  type BaseContext,
-  budgetStatuses,
-  budgetTotals,
-  combinedBalance,
-  goalStatuses,
-  inPeriod,
-  periodSummary,
-  spendByCategory,
-} from '@/domain/budgeting'
-import {
-  type BudgetPeriodConfig,
-  type Period,
-  DEFAULT_PERIOD_CONFIG,
-  todayIso,
-} from '@/domain/period'
-import { baseContext, trendSeries } from '@/services/budgeting'
-import { currenciesNeedingRates } from '@/services/fx'
-import { contributionTransaction } from '@/services/goals'
-import { selectedPeriod } from '@/services/period'
+import { type BudgetPeriodConfig, DEFAULT_PERIOD_CONFIG } from '@/domain/period'
 import { withActiveCurrency, withBaseCurrency } from '@/services/settings'
 import type {
   Budget,
   Category,
-  CategoryKind,
   Id,
   NewBudget,
   NewCategory,
@@ -89,12 +69,7 @@ export const useBudgetStore = defineStore('budget', () => {
   // --- derived -------------------------------------------------------------
 
   const base = computed<CurrencyCode>(() => settings.value.baseCurrency)
-  const ctx = computed<BaseContext>(() => baseContext(settings.value))
   const periodConfig = computed<BudgetPeriodConfig>(() => settings.value.budgetPeriod)
-
-  const period = computed<Period>(() =>
-    selectedPeriod(settings.value, periodOffset.value, todayIso()),
-  )
 
   const isCurrentPeriod = computed(() => periodOffset.value === 0)
 
@@ -104,46 +79,6 @@ export const useBudgetStore = defineStore('budget', () => {
 
   const expenseCategories = computed(() => categories.value.filter((c) => c.kind === 'expense'))
   const incomeCategories = computed(() => categories.value.filter((c) => c.kind === 'income'))
-
-  /** Every wallet balance converted into base, with any unconvertible currency reported. */
-  const netWorth = computed(() =>
-    combinedBalance(
-      wallets.value.map((w) => balances.value[w.id] ?? zero(w.currency)),
-      ctx.value,
-    ),
-  )
-
-  const currentSummary = computed(() => periodSummary(transactions.value, period.value, ctx.value))
-
-  const trend = computed(() =>
-    trendSeries(transactions.value, todayIso(), periodConfig.value, ctx.value),
-  )
-
-  const breakdown = computed(() =>
-    spendByCategory(transactions.value, categories.value, period.value, ctx.value),
-  )
-
-  const budgetStatusList = computed(() =>
-    budgetStatuses(
-      budgets.value,
-      categories.value,
-      transactions.value,
-      period.value,
-      periodConfig.value,
-      ctx.value,
-    ),
-  )
-
-  const budgetSummary = computed(() => budgetTotals(budgetStatusList.value, base.value))
-
-  const goalStatusList = computed(() =>
-    goalStatuses(goals.value, transactions.value, ctx.value, todayIso(), periodConfig.value),
-  )
-
-  /** Currencies in use that have no rate against base — surfaced as a settings nudge. */
-  const missingRates = computed<CurrencyCode[]>(() =>
-    currenciesNeedingRates(wallets.value, settings.value),
-  )
 
   // --- loading -------------------------------------------------------------
 
@@ -290,10 +225,6 @@ export const useBudgetStore = defineStore('budget', () => {
     await reload()
   }
 
-  function categoriesOf(kind: CategoryKind): Category[] {
-    return categories.value.filter((c) => c.kind === kind)
-  }
-
   // --- transactions --------------------------------------------------------
 
   async function addTransaction(tx: NewTransaction): Promise<Transaction> {
@@ -311,10 +242,6 @@ export const useBudgetStore = defineStore('budget', () => {
     await repo.deleteTransaction(id)
     await reload()
   }
-
-  const periodTransactions = computed(() => inPeriod(transactions.value, period.value))
-
-  const recentTransactions = computed(() => transactions.value.slice(0, 8))
 
   // --- budgets -------------------------------------------------------------
 
@@ -367,14 +294,6 @@ export const useBudgetStore = defineStore('budget', () => {
     await reload()
   }
 
-  /** Record a contribution as a transfer into the goal's wallet, tagged with the goal. */
-  async function contributeToGoal(goalId: Id, fromWalletId: Id, amount: Money): Promise<void> {
-    const goal = goalsById.value.get(goalId)
-    if (!goal) throw new Error(`Unknown goal: ${goalId}`)
-    await repo.createTransaction(contributionTransaction(goal, fromWalletId, amount, todayIso()))
-    await reload()
-  }
-
   return {
     // state
     ready,
@@ -391,25 +310,13 @@ export const useBudgetStore = defineStore('budget', () => {
 
     // derived
     base,
-    ctx,
     periodConfig,
-    period,
     isCurrentPeriod,
     categoriesById,
     walletsById,
     goalsById,
     expenseCategories,
     incomeCategories,
-    netWorth,
-    currentSummary,
-    trend,
-    breakdown,
-    budgetStatusList,
-    budgetSummary,
-    goalStatusList,
-    missingRates,
-    periodTransactions,
-    recentTransactions,
 
     // actions
     init,
@@ -429,7 +336,6 @@ export const useBudgetStore = defineStore('budget', () => {
     addCategory,
     editCategory,
     removeCategory,
-    categoriesOf,
     addTransaction,
     editTransaction,
     removeTransaction,
@@ -442,6 +348,5 @@ export const useBudgetStore = defineStore('budget', () => {
     addGoal,
     editGoal,
     removeGoal,
-    contributeToGoal,
   }
 })

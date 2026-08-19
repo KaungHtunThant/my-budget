@@ -38,6 +38,7 @@ import { parseMoney, toDecimalString } from '@/domain/money'
 import { goalStatuses } from '@/domain/budgeting'
 import { todayIso } from '@/domain/period'
 import type { GoalStatus, Id } from '@/domain/types'
+import { contributionTransaction } from '@/services/goals'
 import { useBudgetStore } from '@/stores/budget'
 
 import {
@@ -146,8 +147,11 @@ function openContribute(status: GoalStatus): void {
 
 async function contribute(): Promise<void> {
   const amount = parseMoney(contributeText.value, store.base)
-  if (!amount || !contributeGoalId.value || !contributeFromWalletId.value) return
-  await store.contributeToGoal(contributeGoalId.value, contributeFromWalletId.value, amount)
+  const goal = contributeGoalId.value ? store.goalsById.get(contributeGoalId.value) : undefined
+  if (!amount || !goal || !contributeFromWalletId.value) return
+  await store.addTransaction(
+    contributionTransaction(goal, contributeFromWalletId.value, amount, todayIso()),
+  )
   contributeOpen.value = false
 }
 </script>

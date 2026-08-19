@@ -29,7 +29,7 @@ import { addOutline, alertCircleOutline } from 'ionicons/icons'
 import CurrencyPicker from '@/components/CurrencyPicker/CurrencyPicker.vue'
 import { type CurrencyCode, currency } from '@/domain/currency'
 import { formatRate } from '@/domain/format'
-import { parseRate } from '@/services/fx'
+import { currenciesNeedingRates, parseRate } from '@/services/fx'
 import { withActiveCurrency, withoutCurrency } from '@/services/settings'
 import { useBudgetStore } from '@/stores/budget'
 
@@ -46,6 +46,8 @@ const store = useBudgetStore()
 const pickerOpen = ref(false)
 /** Local text state per currency so a half-typed rate is not written to settings. */
 const drafts = ref<Record<string, string>>({})
+
+const missingRates = computed(() => currenciesNeedingRates(store.wallets, store.settings))
 
 const others = computed(() => otherCurrencies(store.settings))
 
@@ -103,13 +105,13 @@ async function removeCurrency(code: CurrencyCode): Promise<void> {
         </IonNote>
       </div>
 
-      <div v-if="store.missingRates.length" class="warn">
+      <div v-if="missingRates.length" class="warn">
         <IonIcon :icon="alertCircleOutline" />
         <span>
-          {{ store.missingRates.join(', ') }}
-          {{ store.missingRates.length === 1 ? 'is' : 'are' }} held in a wallet but
-          {{ store.missingRates.length === 1 ? 'has' : 'have' }} no rate, so
-          {{ store.missingRates.length === 1 ? 'it is' : 'they are' }} left out of combined totals.
+          {{ missingRates.join(', ') }}
+          {{ missingRates.length === 1 ? 'is' : 'are' }} held in a wallet but
+          {{ missingRates.length === 1 ? 'has' : 'have' }} no rate, so
+          {{ missingRates.length === 1 ? 'it is' : 'they are' }} left out of combined totals.
         </span>
       </div>
 
