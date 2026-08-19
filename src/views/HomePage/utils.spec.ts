@@ -1,22 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CurrencyCode } from '@/domain/currency'
-import type { Money } from '@/domain/money'
-import type { GoalStatus, Id, SavingsGoal, Transaction, Wallet } from '@/domain/types'
+import type { GoalStatus, SavingsGoal, Transaction } from '@/domain/types'
 
-import { netWorth, recentTransactions, trendColumns, visibleGoals } from './utils'
-
-const wallet = (id: string, currency: CurrencyCode): Wallet => ({
-  id,
-  name: id,
-  kind: 'bank',
-  currency,
-  openingBalance: { minor: 0, currency },
-  icon: 'wallet-outline',
-  color: 'primary',
-  archived: false,
-  createdAt: '2026-01-01',
-})
+import { recentTransactions, trendColumns, visibleGoals } from './utils'
 
 const tx = (id: string, date: string, createdAt: string): Transaction => ({
   id,
@@ -103,46 +89,6 @@ describe('visibleGoals', () => {
   it('counts the cap after archived ones are dropped', () => {
     const statuses = [status('a', true), status('b'), status('c'), status('d')]
     expect(visibleGoals(statuses).map((s) => s.goal.id)).toEqual(['b', 'c'])
-  })
-})
-
-describe('netWorth', () => {
-  const balances: Record<Id, Money> = {
-    usd: { minor: 10000, currency: 'USD' },
-    eur: { minor: 5000, currency: 'EUR' },
-  }
-
-  it('converts every balance into base', () => {
-    const result = netWorth([wallet('usd', 'USD'), wallet('eur', 'EUR')], balances, {
-      base: 'USD',
-      rates: { EUR: 1.1 },
-    })
-    expect(result.total).toEqual({ minor: 15500, currency: 'USD' })
-    expect(result.missing).toEqual([])
-  })
-
-  it('reports a currency it could not convert instead of dropping it silently', () => {
-    const result = netWorth([wallet('usd', 'USD'), wallet('eur', 'EUR')], balances, {
-      base: 'USD',
-      rates: {},
-    })
-    expect(result.total).toEqual({ minor: 10000, currency: 'USD' })
-    expect(result.missing).toEqual(['EUR'])
-  })
-
-  it('substitutes zero in the wallet’s own currency when no balance is cached', () => {
-    // The substitute keeps the wallet's currency, so a rate-less wallet is still reported as
-    // unconvertible. A base-currency zero would have made it look convertible and counted.
-    const result = netWorth([wallet('gbp', 'GBP')], {}, { base: 'USD', rates: {} })
-    expect(result.total).toEqual({ minor: 0, currency: 'USD' })
-    expect(result.missing).toEqual(['GBP'])
-  })
-
-  it('is zero with no wallets', () => {
-    expect(netWorth([], {}, { base: 'USD', rates: {} }).total).toEqual({
-      minor: 0,
-      currency: 'USD',
-    })
   })
 })
 

@@ -8,15 +8,15 @@
 
 import {
   type BaseContext,
+  type BaseTotal,
   type PeriodSummary,
   budgetStatuses,
   budgetTotals,
-  combinedBalance,
   goalStatuses,
   periodSummary,
 } from '@/domain/budgeting'
 import type { CurrencyCode } from '@/domain/currency'
-import { type Money, zero } from '@/domain/money'
+import type { Money } from '@/domain/money'
 import { type BudgetPeriodConfig, type Period, daysRemaining } from '@/domain/period'
 import type {
   Budget,
@@ -28,7 +28,7 @@ import type {
   Transaction,
   Wallet,
 } from '@/domain/types'
-import { type TrendBar, trendBars, trendSeries } from '@/services/budgeting'
+import { type TrendBar, netWorth, trendBars, trendSeries } from '@/services/budgeting'
 import { currentPace } from '@/services/period'
 
 /** As many budgets as fit above the fold; the rest are one tap away on Budgets. */
@@ -73,23 +73,6 @@ export function visibleGoals(statuses: readonly GoalStatus[]): GoalStatus[] {
   return statuses.filter((status) => !status.goal.archived).slice(0, TOP_GOALS)
 }
 
-/**
- * Every wallet balance converted into base, with any unconvertible currency reported.
- *
- * A wallet with no cached balance contributes zero *in its own currency*, so it cannot silently
- * become a base-currency zero and skew the total.
- */
-export function netWorth(
-  wallets: readonly Wallet[],
-  balances: Readonly<Record<Id, Money>>,
-  ctx: BaseContext,
-): ReturnType<typeof combinedBalance> {
-  return combinedBalance(
-    wallets.map((w) => balances[w.id] ?? zero(w.currency)),
-    ctx,
-  )
-}
-
 export interface HomeInput {
   wallets: readonly Wallet[]
   balances: Readonly<Record<Id, Money>>
@@ -106,7 +89,7 @@ export interface HomeInput {
 }
 
 export interface HomeView {
-  netWorth: ReturnType<typeof combinedBalance>
+  netWorth: BaseTotal
   summary: PeriodSummary
   budgetSummary: ReturnType<typeof budgetTotals>
   topBudgets: BudgetStatus[]

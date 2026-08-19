@@ -33,13 +33,17 @@ import { iconFor } from '@/theme/icons'
 import CurrencyPicker from '@/components/CurrencyPicker/CurrencyPicker.vue'
 import EmptyState from '@/components/EmptyState/EmptyState.vue'
 import MoneyText from '@/components/MoneyText/MoneyText.vue'
+import { useBudgetContext } from '@/composables/useBudgetContext'
 import { type CurrencyCode, currency } from '@/domain/currency'
 import { amountPlaceholder, formatMoney } from '@/domain/format'
-import { parseMoney, toDecimalString, zero } from '@/domain/money'
+import { toDecimalString } from '@/domain/money'
 import type { Id, Wallet, WalletKind } from '@/domain/types'
 import { useBudgetStore } from '@/stores/budget'
 
+import { canSaveWallet, iconForKind, openingBalance, walletsView } from './utils'
+
 const store = useBudgetStore()
+const { ctx } = useBudgetContext()
 
 const modalOpen = ref(false)
 const pickerOpen = ref(false)
@@ -60,23 +64,11 @@ const KINDS: { value: WalletKind; label: string; icon: string }[] = [
 
 const editing = computed(() => editingId.value !== null)
 const currencyDef = computed(() => currency(walletCurrency.value))
-const canSave = computed(() => name.value.trim().length > 0)
+const canSave = computed(() => canSaveWallet(name.value))
 
-/** Totals per currency, so a multi-currency user sees each holding on its own terms. */
-const byCurrency = computed(() => {
-  const groups = new Map<CurrencyCode, { total: number; count: number }>()
-  for (const w of store.wallets) {
-    const entry = groups.get(w.currency) ?? { total: 0, count: 0 }
-    entry.total += store.balanceOf(w.id).minor
-    entry.count += 1
-    groups.set(w.currency, entry)
-  }
-  return [...groups.entries()].map(([code, entry]) => ({
-    code,
-    total: { minor: entry.total, currency: code },
-    count: entry.count,
-  }))
-})
+const view = computed(() =>
+  walletsView({ wallets: store.wallets, balances: store.balances, ctx: ctx.value }),
+)
 
 function openNew(): void {
   editingId.value = null
@@ -99,8 +91,8 @@ function openEdit(wallet: Wallet): void {
 }
 
 async function save(): Promise<void> {
-  const opening = parseMoney(openingText.value, walletCurrency.value) ?? zero(walletCurrency.value)
-  const icon = KINDS.find((k) => k.value === kind.value)?.icon ?? 'wallet-outline'
+  const opening = openingBalance(openingText.value, walletCurrency.value)
+  const icon = iconForKind(kind.value, KINDS)
 
   if (editingId.value) {
     const existing = store.wallets.find((w) => w.id === editingId.value)
@@ -163,12 +155,12 @@ function pick(code: CurrencyCode): void {
       <template v-else>
         <div class="app-card app-card--stack">
           <span class="app-muted">Combined, in {{ store.base }}</span>
-          <MoneyText :value="store.netWorth.total" class="app-figure--hero" />
-          <div v-if="store.netWorth.missing.length" class="app-muted missing">
-            {{ store.netWorth.missing.join(', ') }} excluded — no rate set yet
+          <MoneyText :value="view.netWorth.total" class="app-figure--hero" />
+          <div v-if="view.netWorth.missing.length" class="app-muted missing">
+            {{ view.netWorth.missing.join(', ') }} excluded — no rate set yet
           </div>
-          <div v-if="byCurrency.length > 1" class="by-currency">
-            <div v-for="row in byCurrency" :key="row.code" class="by-currency__row">
+          <div v-if="view.groups.length > 1" class="by-currency">
+            <div v-for="row in view.groups" :key="row.code" class="by-currency__row">
               <span class="app-muted">{{ row.code }} · {{ row.count }} wallet{{ row.count === 1 ? '' : 's' }}</span>
               <MoneyText :value="row.total" />
             </div>

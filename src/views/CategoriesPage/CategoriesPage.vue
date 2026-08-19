@@ -33,12 +33,16 @@ import { addOutline, close, pricetagsOutline, trashOutline } from 'ionicons/icon
 import { CATEGORY_ICON_NAMES, iconFor } from '@/theme/icons'
 import EmptyState from '@/components/EmptyState/EmptyState.vue'
 import MoneyText from '@/components/MoneyText/MoneyText.vue'
-import { toBase } from '@/domain/budgeting'
-import { sum, zero } from '@/domain/money'
+import { useBudgetContext } from '@/composables/useBudgetContext'
+import { inPeriod } from '@/domain/budgeting'
+import { zero } from '@/domain/money'
 import type { Category, CategoryKind, Id } from '@/domain/types'
 import { useBudgetStore } from '@/stores/budget'
 
+import { canSaveCategory, categoryTotals, visibleCategories } from './utils'
+
 const store = useBudgetStore()
+const { ctx, period } = useBudgetContext()
 
 const tab = ref<CategoryKind>('expense')
 const modalOpen = ref(false)
@@ -52,22 +56,19 @@ const ICONS = CATEGORY_ICON_NAMES
 
 const COLORS = ['primary', 'secondary', 'tertiary', 'success', 'warning', 'danger', 'medium']
 
-const visible = computed(() => store.categories.filter((c) => c.kind === tab.value))
+const visible = computed(() => visibleCategories(store.categories, tab.value))
 
-const canSave = computed(() => name.value.trim().length > 0)
+const canSave = computed(() => canSaveCategory(name.value))
 
 /** Spend or income per category this cycle, so the list is informative not just editable. */
-const totals = computed(() => {
-  const map = new Map<Id, ReturnType<typeof zero>>()
-  for (const category of visible.value) {
-    const amounts = store.periodTransactions
-      .filter((t) => t.categoryId === category.id && t.type === tab.value)
-      .map((t) => toBase(t.amount, store.ctx))
-      .filter((m): m is NonNullable<typeof m> => m !== null)
-    map.set(category.id, sum(amounts, store.base))
-  }
-  return map
-})
+const totals = computed(() =>
+  categoryTotals(
+    inPeriod(store.transactions, period.value),
+    visible.value,
+    tab.value,
+    ctx.value,
+  ),
+)
 
 function openNew(): void {
   editingId.value = null
@@ -164,7 +165,7 @@ async function remove(): Promise<void> {
       </div>
 
       <p class="app-muted note">
-        Showing {{ tab === 'income' ? 'income' : 'spending' }} for {{ store.period.label }}.
+        Showing {{ tab === 'income' ? 'income' : 'spending' }} for {{ period.label }}.
       </p>
 
       <IonFab slot="fixed" vertical="bottom" horizontal="end">

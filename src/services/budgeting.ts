@@ -6,14 +6,40 @@
  * calls domain directly. A service whose body is a single forwarding call is noise.
  */
 
-import { type BaseContext, type PeriodSummary, periodTrend } from '@/domain/budgeting'
-import { type Money, toFloat } from '@/domain/money'
+import {
+  type BaseContext,
+  type BaseTotal,
+  type PeriodSummary,
+  combinedBalance,
+  periodTrend,
+} from '@/domain/budgeting'
+import { type Money, toFloat, zero } from '@/domain/money'
 import type { BudgetPeriodConfig } from '@/domain/period'
-import type { Settings, Transaction } from '@/domain/types'
+import type { Id, Settings, Transaction, Wallet } from '@/domain/types'
 
 /** The `{ base, rates }` pair threaded through every conversion in the domain layer. */
 export function baseContext(settings: Settings): BaseContext {
   return { base: settings.baseCurrency, rates: settings.rates }
+}
+
+/**
+ * Every wallet balance converted into base, with any unconvertible currency reported.
+ *
+ * Shared by Home and Wallets. The argument threading is the reason it is here rather than a
+ * direct `combinedBalance` call at each site: the balances arrive as a keyed cache and have to
+ * be zipped against the wallet list, and a wallet with no cached balance must contribute zero
+ * *in its own currency* — a base-currency zero would make a rate-less wallet look convertible
+ * and quietly count it.
+ */
+export function netWorth(
+  wallets: readonly Wallet[],
+  balances: Readonly<Record<Id, Money>>,
+  ctx: BaseContext,
+): BaseTotal {
+  return combinedBalance(
+    wallets.map((w) => balances[w.id] ?? zero(w.currency)),
+    ctx,
+  )
 }
 
 /**
