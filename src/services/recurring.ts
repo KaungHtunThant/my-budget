@@ -14,12 +14,16 @@ import type { NewTransaction, RecurringRule } from '@/domain/types'
  *
  * The rule's id is kept on the transaction so the history can show where it came from, and so a
  * future scheduler can tell whether it has already run for a period.
+ *
+ * A rule entered in a foreign currency hands its frozen snapshot straight through, so the
+ * generated entry reads "500.00 USD at 4400" in history exactly as the same bill entered by hand
+ * would. `?? null` because the field postdates the records already on disk.
  */
 export function transactionFromRule(rule: RecurringRule, today: string): NewTransaction {
   return {
     type: rule.type,
     amount: rule.amount,
-    fx: null,
+    fx: rule.fx ?? null,
     walletId: rule.walletId,
     toWalletId: rule.toWalletId,
     toAmount: null,

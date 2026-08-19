@@ -35,15 +35,14 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/vue'
-import { close, swapHorizontalOutline, trashOutline } from 'ionicons/icons'
+import { close, trashOutline } from 'ionicons/icons'
 import CurrencyPicker from '../CurrencyPicker/CurrencyPicker.vue'
+import FxRateField from '../FxRateField/FxRateField.vue'
 import type { CurrencyCode } from '@/domain/currency'
-import { amountPlaceholder, formatMoney, formatRate } from '@/domain/format'
-import { toDecimalString, zero } from '@/domain/money'
+import { amountPlaceholder } from '@/domain/format'
+import { toDecimalString } from '@/domain/money'
 import { todayIso } from '@/domain/period'
 import type { Id, Transaction, TransactionType } from '@/domain/types'
-import { inverseRate } from '@/domain/fx'
-import { parseRate } from '@/services/fx'
 import {
   type TransactionDraft,
   buildTransaction,
@@ -113,8 +112,6 @@ const transferTargets = computed(() => store.wallets.filter((w) => w.id !== wall
 const needsRate = computed(() => entryNeedsRate(draft.value, store.wallets))
 const rateFrom = computed<CurrencyCode>(() => rateFromOf(draft.value, store.wallets))
 const rateTo = computed<CurrencyCode>(() => rateToOf(draft.value, store.wallets))
-
-const rate = computed(() => parseRate(rateText.value))
 
 /** Entered amount, what lands in the wallet, what arrives on a transfer, and rate validity. */
 const resolved = computed(() => resolveDraft(draft.value, store.wallets))
@@ -318,41 +315,16 @@ async function remove(): Promise<void> {
     </IonList>
 
     <!-- Exchange rate, only when money crosses currencies -->
-    <div v-if="needsRate" class="fx-card">
-      <div class="fx-card__head">
-        <IonIcon :icon="swapHorizontalOutline" />
-        <strong>Exchange rate</strong>
-      </div>
-      <p class="fx-card__lead">
-        This crosses currencies, so enter the rate you actually got. It is stored with the
-        transaction and never updated later.
-      </p>
-      <IonItem lines="none" class="fx-card__item">
-        <IonInput
-          v-model="rateText"
-          type="text"
-          inputmode="decimal"
-          :label="`1 ${rateFrom} = ? ${rateTo}`"
-          label-placement="stacked"
-          placeholder="0.00"
-        />
-      </IonItem>
-      <div v-if="rateValid && rate !== null" class="fx-card__preview">
-        <span class="app-muted">1 {{ rateTo }} = {{ formatRate(inverseRate(rate)) }} {{ rateFrom }}</span>
-        <template v-if="type === 'transfer' && resolvedToAmount">
-          <strong>
-            {{ formatMoney(enteredMoney ?? zero(walletCurrency)) }} →
-            {{ formatMoney(resolvedToAmount) }}
-          </strong>
-        </template>
-        <template v-else-if="resolvedAmount">
-          <strong>
-            {{ formatMoney(enteredMoney ?? zero(entryCurrency)) }} →
-            {{ formatMoney(resolvedAmount) }}
-          </strong>
-        </template>
-      </div>
-    </div>
+    <FxRateField
+      v-if="needsRate"
+      v-model="rateText"
+      :from="rateFrom"
+      :to="rateTo"
+      :entered="enteredMoney"
+      :converted="type === 'transfer' ? resolvedToAmount : resolvedAmount"
+      lead="This crosses currencies, so enter the rate you actually got. It is stored with the
+        transaction and never updated later."
+    />
 
     <IonText v-if="error" color="danger" class="error">{{ error }}</IonText>
 
@@ -438,42 +410,6 @@ async function remove(): Promise<void> {
 .form-list {
   margin: 16px -16px 0;
   background: transparent;
-}
-
-.fx-card {
-  margin: 18px 0 8px;
-  padding: 14px 16px;
-  border: 1px solid rgba(var(--ion-color-warning-rgb), 0.4);
-  background: rgba(var(--ion-color-warning-rgb), 0.08);
-  border-radius: var(--app-radius);
-}
-
-.fx-card__head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.fx-card__lead {
-  margin: 0 0 8px;
-  font-size: 0.82rem;
-  line-height: 1.45;
-  color: var(--app-text-muted);
-}
-
-.fx-card__item {
-  --background: transparent;
-  --padding-start: 0;
-  --inner-padding-end: 0;
-}
-
-.fx-card__preview {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 0.85rem;
-  padding-top: 8px;
 }
 
 .error {

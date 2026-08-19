@@ -66,4 +66,23 @@ describe('transactionFromRule', () => {
   it('dates from the argument, not the clock — the scheduler will need a past date', () => {
     expect(transactionFromRule(rule, '2026-07-01').date).toBe('2026-07-01')
   })
+
+  it('hands a foreign-currency rule its frozen conversion through', () => {
+    // The generated entry then reads "500.00 USD at 4400" in history, exactly as the same bill
+    // entered by hand would — which is the whole reason the snapshot is stored on the rule.
+    const foreign: RecurringRule = {
+      ...rule,
+      amount: { minor: 220000000, currency: 'MMK' },
+      fx: { enteredAmount: { minor: 50000, currency: 'USD' }, rate: 4400 },
+    }
+    expect(transactionFromRule(foreign, '2026-08-20')).toMatchObject({
+      amount: { minor: 220000000, currency: 'MMK' },
+      fx: { enteredAmount: { minor: 50000, currency: 'USD' }, rate: 4400 },
+    })
+  })
+
+  it('reports no conversion for a rule written before the field existed', () => {
+    // `fx` is optional on the record, and a transaction's is not — `undefined` must not leak.
+    expect(transactionFromRule(rule, '2026-08-20').fx).toBeNull()
+  })
 })

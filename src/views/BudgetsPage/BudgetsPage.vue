@@ -30,17 +30,27 @@ import {
 } from '@ionic/vue'
 import { addOutline, close, pieChartOutline, trashOutline } from 'ionicons/icons'
 import { iconFor } from '@/theme/icons'
+import CurrencyPicker from '@/components/CurrencyPicker/CurrencyPicker.vue'
 import EmptyState from '@/components/EmptyState/EmptyState.vue'
+import FxRateField from '@/components/FxRateField/FxRateField.vue'
 import MoneyText from '@/components/MoneyText/MoneyText.vue'
 import PeriodSwitcher from '@/components/PeriodSwitcher/PeriodSwitcher.vue'
 import ProgressMeter from '@/components/ProgressMeter/ProgressMeter.vue'
+import type { CurrencyCode } from '@/domain/currency'
 import { amountPlaceholder, formatMoney } from '@/domain/format'
-import { parseMoney, toDecimalString } from '@/domain/money'
+import { toDecimalString } from '@/domain/money'
 import { describePeriodConfig, todayIso } from '@/domain/period'
-import type { Budget, BudgetStatus, Id } from '@/domain/types'
+import type { BudgetStatus, Id } from '@/domain/types'
+import { type AmountEntry, entryNeedsRate, rateTextOf, resolveEntry } from '@/services/fx'
 import { useBudgetStore } from '@/stores/budget'
 
-import { availableCategories as pickableCategories, budgetsView, canSaveBudget } from './utils'
+import {
+  type BudgetDraft,
+  availableCategories as pickableCategories,
+  budgetsView,
+  buildBudget,
+  canSaveBudget,
+} from './utils'
 
 const store = useBudgetStore()
 const { ctx, period } = useBudgetContext()
@@ -49,7 +59,10 @@ const modalOpen = ref(false)
 const editingId = ref<Id | null>(null)
 const formCategoryId = ref<Id | null>(null)
 const formLimit = ref('')
+const formCurrency = ref<CurrencyCode>(store.base)
+const formRateText = ref('')
 const formRollover = ref(false)
+const pickerOpen = ref(false)
 
 const view = computed(() =>
   budgetsView({
@@ -70,12 +83,34 @@ const availableCategories = computed(() =>
   pickableCategories(store.expenseCategories, store.budgets, formCategoryId.value),
 )
 
-const canSave = computed(() => canSaveBudget(formCategoryId.value, formLimit.value, store.base))
+/**
+ * The limit as typed, with base as the currency it must be stored in. Assembled inside the
+ * computed so a change of base or of the picked currency stays live.
+ */
+const entry = computed<AmountEntry>(() => ({
+  amountText: formLimit.value,
+  entryCurrency: formCurrency.value,
+  targetCurrency: store.base,
+  rateText: formRateText.value,
+}))
+
+const draft = computed<BudgetDraft>(() => ({
+  categoryId: formCategoryId.value,
+  entry: entry.value,
+  rollover: formRollover.value,
+}))
+
+const needsRate = computed(() => entryNeedsRate(entry.value))
+const resolved = computed(() => resolveEntry(entry.value))
+
+const canSave = computed(() => canSaveBudget(draft.value))
 
 function openNew(): void {
   editingId.value = null
   formCategoryId.value = availableCategories.value[0]?.id ?? null
   formLimit.value = ''
+  formCurrency.value = store.base
+  formRateText.value = ''
   formRollover.value = false
   modalOpen.value = true
 }
@@ -83,32 +118,32 @@ function openNew(): void {
 function openEdit(status: BudgetStatus): void {
   editingId.value = status.budget.id
   formCategoryId.value = status.budget.categoryId
-  formLimit.value = toDecimalString(status.budget.limit)
+  // A limit typed in another currency reopens as it was typed, rate included — otherwise saving an
+  // untouched form would re-read the converted figure as a fresh foreign amount.
+  const entered = status.budget.fx?.enteredAmount ?? status.budget.limit
+  formLimit.value = toDecimalString(entered)
+  formCurrency.value = entered.currency
+  formRateText.value = rateTextOf(status.budget.fx)
   formRollover.value = status.budget.rollover
   modalOpen.value = true
 }
 
+function pickCurrency(code: CurrencyCode): void {
+  formCurrency.value = code
+  pickerOpen.value = false
+  // A fresh currency needs a fresh rate; a stale one would be silently wrong.
+  if (code !== store.base) formRateText.value = ''
+}
+
 async function save(): Promise<void> {
-  const limit = parseMoney(formLimit.value, store.base)
-  if (!limit || !formCategoryId.value) return
+  const payload = buildBudget(draft.value)
+  if (!payload) return
 
   if (editingId.value) {
     const existing = store.budgets.find((b) => b.id === editingId.value)
-    if (existing) {
-      await store.editBudget({
-        ...existing,
-        categoryId: formCategoryId.value,
-        limit,
-        rollover: formRollover.value,
-      })
-    }
+    if (existing) await store.editBudget({ ...existing, ...payload })
   } else {
-    await store.addBudget({
-      categoryId: formCategoryId.value,
-      limit,
-      rollover: formRollover.value,
-      archived: false,
-    } satisfies Omit<Budget, 'id'>)
+    await store.addBudget(payload)
   }
   modalOpen.value = false
 }
@@ -246,10 +281,13 @@ async function remove(): Promise<void> {
                 v-model="formLimit"
                 type="text"
                 inputmode="decimal"
-                :label="`Limit per cycle (${store.base})`"
+                label="Limit per cycle"
                 label-placement="stacked"
-                :placeholder="amountPlaceholder(store.base)"
+                :placeholder="amountPlaceholder(formCurrency)"
               />
+              <IonButton slot="end" fill="clear" size="small" @click="pickerOpen = true">
+                {{ formCurrency }}
+              </IonButton>
             </IonItem>
             <IonItem>
               <IonToggle v-model="formRollover">
@@ -262,9 +300,21 @@ async function remove(): Promise<void> {
           </IonList>
 
           <IonNote class="modal-note">
-            Budgets are set in {{ store.base }}. Spending in another currency is converted
-            using the rate stored with each transaction.
+            Budgets are held in {{ store.base }}, and spending in another currency is counted
+            against them using the rate stored with each transaction. Tap the currency to type this
+            limit in another one instead — it is converted once, at the rate you give.
           </IonNote>
+
+          <FxRateField
+            v-if="needsRate"
+            v-model="formRateText"
+            :from="formCurrency"
+            :to="store.base"
+            :entered="resolved?.entered ?? null"
+            :converted="resolved?.amount ?? null"
+            lead="Budgets are held in the base currency, so enter the rate to use. The limit is
+              converted once and stored; later rate changes leave it alone."
+          />
 
           <IonButton
             v-if="editingId"
@@ -277,6 +327,16 @@ async function remove(): Promise<void> {
             <IonIcon slot="start" :icon="trashOutline" />
             Delete budget
           </IonButton>
+
+          <IonModal :is-open="pickerOpen" @did-dismiss="pickerOpen = false">
+            <CurrencyPicker
+              :selected="formCurrency"
+              :favourites="store.settings.activeCurrencies"
+              title="Limit currency"
+              @select="pickCurrency"
+              @dismiss="pickerOpen = false"
+            />
+          </IonModal>
         </IonContent>
       </IonModal>
     </IonContent>

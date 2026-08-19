@@ -6,7 +6,7 @@
  * transactions on schedule needs a persistent `lastRunDate` to stay idempotent, which is a
  * Stage 2 concern. "Add now" lets the flow be exercised meanwhile.
  */
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
   IonBackButton,
   IonButton,
@@ -35,16 +35,22 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import { addOutline, close, repeatOutline, trashOutline } from 'ionicons/icons'
+import { useBudgetContext } from '@/composables/useBudgetContext'
+import CurrencyPicker from '@/components/CurrencyPicker/CurrencyPicker.vue'
 import EmptyState from '@/components/EmptyState/EmptyState.vue'
+import FxRateField from '@/components/FxRateField/FxRateField.vue'
 import MoneyText from '@/components/MoneyText/MoneyText.vue'
+import type { CurrencyCode } from '@/domain/currency'
 import { amountPlaceholder } from '@/domain/format'
-import { parseMoney, toDecimalString } from '@/domain/money'
+import { toDecimalString } from '@/domain/money'
 import { WEEKDAY_NAMES, todayIso } from '@/domain/period'
 import type { Id, RecurrenceFrequency, RecurringRule, TransactionType } from '@/domain/types'
+import { type AmountEntry, entryNeedsRate, rateTextOf, resolveEntry } from '@/services/fx'
 import { transactionFromRule } from '@/services/recurring'
 import { useBudgetStore } from '@/stores/budget'
 
 import {
+  type RuleDraft,
   buildRule,
   canSaveRule,
   describeRule,
@@ -53,18 +59,22 @@ import {
 } from './utils'
 
 const store = useBudgetStore()
+const { ctx } = useBudgetContext()
 
 const modalOpen = ref(false)
 const editingId = ref<Id | null>(null)
 const name = ref('')
 const type = ref<TransactionType>('expense')
 const amountText = ref('')
+const entryCurrency = ref<CurrencyCode>(store.base)
+const rateText = ref('')
 const walletId = ref<Id | null>(null)
 const categoryId = ref<Id | null>(null)
 const frequency = ref<RecurrenceFrequency>('monthly')
 const dayOfMonth = ref(1)
 const weekday = ref(1)
 const active = ref(true)
+const pickerOpen = ref(false)
 
 const FREQUENCIES: { value: RecurrenceFrequency; label: string }[] = [
   { value: 'weekly', label: 'Weekly' },
@@ -75,16 +85,47 @@ const FREQUENCIES: { value: RecurrenceFrequency; label: string }[] = [
 
 const usesWeekday = computed(() => anchoredToWeekday(frequency.value))
 
-const canSave = computed(() =>
-  canSaveRule(name.value, amountText.value, walletId.value, store.base),
-)
+/** The currency the rule is stored in: the wallet's, since that is what it will be paid in. */
+const walletCurrency = computed<CurrencyCode>(() => {
+  const wallet = walletId.value === null ? undefined : store.walletsById.get(walletId.value)
+  return wallet?.currency ?? store.base
+})
+
+/**
+ * The amount as typed and the currency it has to end up in, assembled inside the computed so the
+ * wallet and currency it reads stay live.
+ */
+const entry = computed<AmountEntry>(() => ({
+  amountText: amountText.value,
+  entryCurrency: entryCurrency.value,
+  targetCurrency: walletCurrency.value,
+  rateText: rateText.value,
+}))
+
+const draft = computed<RuleDraft>(() => ({
+  name: name.value,
+  type: type.value,
+  entry: entry.value,
+  walletId: walletId.value,
+  categoryId: categoryId.value,
+  frequency: frequency.value,
+  dayOfMonth: dayOfMonth.value,
+  weekday: weekday.value,
+  active: active.value,
+  today: todayIso(),
+}))
+
+const needsRate = computed(() => entryNeedsRate(entry.value))
+const resolved = computed(() => resolveEntry(entry.value))
+
+const canSave = computed(() => canSaveRule(draft.value))
 
 const availableCategories = computed(() =>
   type.value === 'income' ? store.incomeCategories : store.expenseCategories,
 )
 
 /** Monthly-equivalent totals, so the commitment is visible as one figure. */
-const commitment = computed(() => monthlyCommitment(store.rules, store.base))
+const commitment = computed(() => monthlyCommitment(store.rules, ctx.value))
 
 function describe(rule: RecurringRule): string {
   return describeRule(rule, store.walletsById.get(rule.walletId))
@@ -96,6 +137,9 @@ function openNew(): void {
   type.value = 'expense'
   amountText.value = ''
   walletId.value = store.wallets[0]?.id ?? null
+  // After the wallet, so it picks up that wallet's currency rather than the previous one's.
+  entryCurrency.value = walletCurrency.value
+  rateText.value = ''
   categoryId.value = store.expenseCategories[0]?.id ?? null
   frequency.value = 'monthly'
   dayOfMonth.value = 1
@@ -108,8 +152,12 @@ function openEdit(rule: RecurringRule): void {
   editingId.value = rule.id
   name.value = rule.name
   type.value = rule.type
-  amountText.value = toDecimalString(rule.amount)
   walletId.value = rule.walletId
+  // A rule that crossed currencies reopens as the user typed it — amount, currency and rate —
+  // so re-saving an untouched form cannot rewrite the stored amount at a different rate.
+  amountText.value = toDecimalString(rule.fx?.enteredAmount ?? rule.amount)
+  entryCurrency.value = (rule.fx?.enteredAmount ?? rule.amount).currency
+  rateText.value = rateTextOf(rule.fx)
   categoryId.value = rule.categoryId
   frequency.value = rule.frequency
   dayOfMonth.value = rule.dayOfMonth ?? 1
@@ -118,22 +166,16 @@ function openEdit(rule: RecurringRule): void {
   modalOpen.value = true
 }
 
-async function save(): Promise<void> {
-  const amount = parseMoney(amountText.value, store.base)
-  if (!amount || !walletId.value) return
+function pickCurrency(code: CurrencyCode): void {
+  entryCurrency.value = code
+  pickerOpen.value = false
+  // A fresh currency needs a fresh rate; a stale one would be silently wrong.
+  if (code !== walletCurrency.value) rateText.value = ''
+}
 
-  const payload = buildRule({
-    name: name.value,
-    type: type.value,
-    amount,
-    walletId: walletId.value,
-    categoryId: categoryId.value,
-    frequency: frequency.value,
-    dayOfMonth: dayOfMonth.value,
-    weekday: weekday.value,
-    active: active.value,
-    today: todayIso(),
-  })
+async function save(): Promise<void> {
+  const payload = buildRule(draft.value)
+  if (!payload) return
 
   if (editingId.value) {
     const existing = store.rules.find((r) => r.id === editingId.value)
@@ -143,6 +185,11 @@ async function save(): Promise<void> {
   }
   modalOpen.value = false
 }
+
+// Default the amount's currency to the wallet's, which is right the vast majority of the time.
+watch(walletId, () => {
+  if (editingId.value === null) entryCurrency.value = walletCurrency.value
+})
 
 async function remove(id: Id): Promise<void> {
   await store.removeRule(id)
@@ -191,6 +238,11 @@ async function addNow(rule: RecurringRule): Promise<void> {
             <MoneyText :value="commitment.income" class="app-figure--large" />
           </div>
         </div>
+
+        <p v-if="commitment.missing.length" class="app-muted note">
+          {{ commitment.missing.join(', ') }} left out of these figures — set a rate for it in
+          Settings to include it.
+        </p>
 
         <div class="app-card app-card--flush">
           <IonList lines="full">
@@ -259,10 +311,13 @@ async function addNow(rule: RecurringRule): Promise<void> {
                 v-model="amountText"
                 type="text"
                 inputmode="decimal"
-                :label="`Amount (${store.base})`"
+                label="Amount"
                 label-placement="stacked"
-                :placeholder="amountPlaceholder(store.base)"
+                :placeholder="amountPlaceholder(entryCurrency)"
               />
+              <IonButton slot="end" fill="clear" size="small" @click="pickerOpen = true">
+                {{ entryCurrency }}
+              </IonButton>
             </IonItem>
             <IonItem>
               <IonSelect v-model="walletId" label="Wallet" label-placement="stacked" interface="action-sheet">
@@ -310,8 +365,20 @@ async function addNow(rule: RecurringRule): Promise<void> {
           </IonList>
 
           <IonNote class="modal-note">
-            Day of month is capped at 28 so the rule fires in every month.
+            Tap the currency to enter this in another one. Day of month is capped at 28 so the rule
+            fires in every month.
           </IonNote>
+
+          <FxRateField
+            v-if="needsRate"
+            v-model="rateText"
+            :from="entryCurrency"
+            :to="walletCurrency"
+            :entered="resolved?.entered ?? null"
+            :converted="resolved?.amount ?? null"
+            lead="The wallet holds another currency, so enter the rate you are using. It is stored
+              with the rule and applied to every entry it generates."
+          />
 
           <IonButton
             v-if="editingId"
@@ -324,6 +391,16 @@ async function addNow(rule: RecurringRule): Promise<void> {
             <IonIcon slot="start" :icon="trashOutline" />
             Delete rule
           </IonButton>
+
+          <IonModal :is-open="pickerOpen" @did-dismiss="pickerOpen = false">
+            <CurrencyPicker
+              :selected="entryCurrency"
+              :favourites="store.settings.activeCurrencies"
+              title="Amount currency"
+              @select="pickCurrency"
+              @dismiss="pickerOpen = false"
+            />
+          </IonModal>
         </IonContent>
       </IonModal>
     </IonContent>

@@ -13,15 +13,15 @@ import type { CurrencyCode } from '@/domain/currency'
 import { convert, impliedRate } from '@/domain/fx'
 import { type Money, parseMoney } from '@/domain/money'
 import type {
+  EnteredFx,
   Id,
   NewTransaction,
   Transaction,
-  TransactionFx,
   TransactionType,
   Wallet,
 } from '@/domain/types'
 
-import { parseRate } from './fx'
+import { type AmountEntry, entryNeedsRate, parseRate, rateTextOf, resolveEntry } from './fx'
 
 /** The entry form's state, exactly as the user has it. */
 export interface TransactionDraft {
@@ -54,7 +54,7 @@ export interface ResolvedDraft {
   /** What arrives in the destination wallet. Transfers only. */
   toAmount: Money | null
   /** The frozen conversion record, kept on non-transfer entries that needed a rate. */
-  fx: TransactionFx | null
+  fx: EnteredFx | null
   /** False when a rate is required and the typed one is unusable. */
   rateOk: boolean
 }
@@ -65,6 +65,22 @@ const walletOf = (wallets: readonly Wallet[], id: Id | null): Wallet | undefined
 /** The currency the source wallet holds, falling back to base before one is chosen. */
 export function walletCurrency(draft: TransactionDraft, wallets: readonly Wallet[]): CurrencyCode {
   return walletOf(wallets, draft.walletId)?.currency ?? draft.base
+}
+
+/**
+ * The draft's income/expense amount as a plain cross-currency entry.
+ *
+ * Everything but a transfer is exactly that shape — an amount typed in one currency, a wallet
+ * that stores another — so the arithmetic lives once in `services/fx` and is shared with the
+ * recurring-rule and budget forms rather than re-derived here.
+ */
+function amountEntry(draft: TransactionDraft, wallets: readonly Wallet[]): AmountEntry {
+  return {
+    amountText: draft.amountText,
+    entryCurrency: draft.entryCurrency,
+    targetCurrency: walletCurrency(draft, wallets),
+    rateText: draft.rateText,
+  }
 }
 
 /** The currency a typed rate is expressed *from*. */
@@ -91,7 +107,7 @@ export function needsRate(draft: TransactionDraft, wallets: readonly Wallet[]): 
     const to = walletOf(wallets, draft.toWalletId)
     return Boolean(from && to && from.currency !== to.currency)
   }
-  return draft.entryCurrency !== walletCurrency(draft, wallets)
+  return entryNeedsRate(amountEntry(draft, wallets))
 }
 
 /**
@@ -105,33 +121,23 @@ export function resolveDraft(
   draft: TransactionDraft,
   wallets: readonly Wallet[],
 ): ResolvedDraft | null {
-  const enteredIn = draft.type === 'transfer' ? walletCurrency(draft, wallets) : draft.entryCurrency
-  const entered = parseMoney(draft.amountText, enteredIn)
+  if (draft.type !== 'transfer') {
+    const resolved = resolveEntry(amountEntry(draft, wallets))
+    return resolved === null ? null : { ...resolved, toAmount: null }
+  }
+
+  const entered = parseMoney(draft.amountText, walletCurrency(draft, wallets))
   if (entered === null) return null
 
   const needs = needsRate(draft, wallets)
   const rate = parseRate(draft.rateText)
-  const rateOk = !needs || rate !== null
+  const toAmount = !needs
+    ? entered
+    : rate === null
+      ? null
+      : convert(entered, rateTo(draft, wallets), rate)
 
-  if (draft.type === 'transfer') {
-    const toAmount = !needs
-      ? entered
-      : rate === null
-        ? null
-        : convert(entered, rateTo(draft, wallets), rate)
-    return { entered, amount: entered, toAmount, fx: null, rateOk }
-  }
-
-  if (!needs) return { entered, amount: entered, toAmount: null, fx: null, rateOk }
-  if (rate === null) return { entered, amount: null, toAmount: null, fx: null, rateOk }
-
-  return {
-    entered,
-    amount: convert(entered, walletCurrency(draft, wallets), rate),
-    toAmount: null,
-    fx: { enteredAmount: entered, rate },
-    rateOk,
-  }
+  return { entered, amount: entered, toAmount, fx: null, rateOk: !needs || rate !== null }
 }
 
 /** Whether the form is complete enough to save. */
@@ -190,7 +196,7 @@ export function buildTransaction(
  * saving that form again wrote an amount 100x off.
  */
 export function rateTextFor(tx: Transaction): string {
-  if (tx.fx) return String(tx.fx.rate)
+  if (tx.fx) return rateTextOf(tx.fx)
   if (tx.type === 'transfer' && tx.toAmount && tx.toAmount.currency !== tx.amount.currency) {
     return String(impliedRate(tx.amount, tx.toAmount))
   }

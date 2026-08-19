@@ -21,6 +21,16 @@ All notable changes to this project are recorded here. The format follows
   `IndexedDbRepository`, which is what makes the swap provably behaviour-preserving. Includes a
   regression test for the Vue-proxy clone trap. `fake-indexeddb` lets the real Dexie path run
   under Vitest. Test count: 63 → 109.
+- **A recurring bill or a budget limit can be entered in any currency.** Both forms now offer the
+  currency picker the transaction modal had, and both ask for a rate when the amount is not in the
+  currency the record has to store — a rule's wallet, a budget's base. The amount is stored
+  converted with the conversion frozen beside it, so reopening the form shows what was typed and a
+  generated bill reads in history exactly as the same entry made by hand. The entry rule itself is
+  one function, `services/fx.resolveEntry`, which `services/transactions` now composes rather than
+  duplicating. Two consequences worth naming: a rule paid from a non-base wallet used to store its
+  amount in the *base* currency and hand that straight to a wallet transaction, and the monthly
+  commitment total summed rule amounts as if they shared a currency — it now converts through the
+  settings rates and says which currency it had to leave out.
 
 ### Changed
 

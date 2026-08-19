@@ -66,11 +66,16 @@ export interface Category {
 export type TransactionType = 'income' | 'expense' | 'transfer'
 
 /**
- * Recorded conversion detail, present only when the entered currency differs from the
- * wallet's. `rate` means: 1 unit of `enteredAmount.currency` = `rate` units of the
- * wallet's currency. Frozen at entry time and never recomputed.
+ * Recorded conversion detail for one entered amount, present only when the currency the amount
+ * was typed in differs from the one the record stores. `rate` means: 1 unit of
+ * `enteredAmount.currency` = `rate` units of the stored currency. Frozen at entry time and
+ * never recomputed.
+ *
+ * Three records carry one, because the same entry rule produces all three: a transaction and a
+ * recurring rule store their wallet's currency, a budget stores base. The shared shape is what
+ * lets `services/fx.resolveEntry` be the single implementation of that rule.
  */
-export interface TransactionFx {
+export interface EnteredFx {
   readonly enteredAmount: Money
   readonly rate: number
 }
@@ -81,7 +86,7 @@ export interface Transaction {
   /** Amount in the wallet's own currency. Always positive; `type` carries the direction. */
   amount: Money
   /** Set when the user entered a foreign-currency amount and supplied a rate. */
-  fx: TransactionFx | null
+  fx: EnteredFx | null
   /** Source wallet for expense/transfer, destination wallet for income. */
   walletId: Id
   /** Destination wallet, transfers only. */
@@ -111,6 +116,14 @@ export interface Budget {
   categoryId: Id
   /** Limit per period, in the base currency. */
   limit: Money
+  /**
+   * Set when the limit was typed in a currency other than base, so reopening the budget shows
+   * what the user actually entered rather than only the converted figure.
+   *
+   * Optional rather than nullable, unlike `Transaction.fx`: records written before this field
+   * existed have no key for it, and pretending otherwise would be a lie the type tells.
+   */
+  fx?: EnteredFx | null
   /** Carry unspent room into the next period. */
   rollover: boolean
   archived: boolean
@@ -139,7 +152,14 @@ export interface RecurringRule {
   readonly id: Id
   name: string
   type: TransactionType
+  /**
+   * In the wallet's own currency, exactly like the transactions this rule generates — a rule
+   * whose amount were held in some other currency could not be materialised without a rate the
+   * scheduler has no way to ask for.
+   */
   amount: Money
+  /** Set when the amount was typed in a currency the wallet does not hold. See `Budget.fx`. */
+  fx?: EnteredFx | null
   walletId: Id
   toWalletId: Id | null
   categoryId: Id | null

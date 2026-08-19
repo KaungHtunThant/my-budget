@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Budget, Category, CategoryKind } from '@/domain/types'
+import type { AmountEntry } from '@/services/fx'
 
-import { availableCategories, canSaveBudget } from './utils'
+import { type BudgetDraft, availableCategories, buildBudget, canSaveBudget } from './utils'
 
 const category = (id: string, kind: CategoryKind = 'expense'): Category => ({
   id,
@@ -49,19 +50,80 @@ describe('availableCategories', () => {
   })
 })
 
+const entry = (overrides: Partial<AmountEntry> = {}): AmountEntry => ({
+  amountText: '250',
+  entryCurrency: 'USD',
+  targetCurrency: 'USD',
+  rateText: '',
+  ...overrides,
+})
+
+const draft = (overrides: Partial<BudgetDraft> = {}): BudgetDraft => ({
+  categoryId: 'rent',
+  entry: entry(),
+  rollover: false,
+  ...overrides,
+})
+
 describe('canSaveBudget', () => {
   it('needs a category and a limit above zero', () => {
-    expect(canSaveBudget('rent', '250', 'USD')).toBe(true)
+    expect(canSaveBudget(draft())).toBe(true)
   })
 
   it('refuses without a category', () => {
-    expect(canSaveBudget(null, '250', 'USD')).toBe(false)
+    expect(canSaveBudget(draft({ categoryId: null }))).toBe(false)
   })
 
   it('refuses a zero, negative or unparseable limit', () => {
-    expect(canSaveBudget('rent', '0', 'USD')).toBe(false)
-    expect(canSaveBudget('rent', '-5', 'USD')).toBe(false)
-    expect(canSaveBudget('rent', '', 'USD')).toBe(false)
-    expect(canSaveBudget('rent', 'abc', 'USD')).toBe(false)
+    expect(canSaveBudget(draft({ entry: entry({ amountText: '0' }) }))).toBe(false)
+    expect(canSaveBudget(draft({ entry: entry({ amountText: '-5' }) }))).toBe(false)
+    expect(canSaveBudget(draft({ entry: entry({ amountText: '' }) }))).toBe(false)
+    expect(canSaveBudget(draft({ entry: entry({ amountText: 'abc' }) }))).toBe(false)
+  })
+
+  it('needs a rate when the limit was typed in something other than base', () => {
+    const crossing = entry({ entryCurrency: 'EUR', targetCurrency: 'USD' })
+    expect(canSaveBudget(draft({ entry: crossing }))).toBe(false)
+    expect(canSaveBudget(draft({ entry: { ...crossing, rateText: '1.08' } }))).toBe(true)
+  })
+})
+
+describe('buildBudget', () => {
+  it('stores a base-currency limit as typed, with no conversion recorded', () => {
+    expect(buildBudget(draft())).toEqual({
+      categoryId: 'rent',
+      limit: { minor: 25000, currency: 'USD' },
+      fx: null,
+      rollover: false,
+      archived: false,
+    })
+  })
+
+  it('converts a foreign limit into base and freezes what was typed', () => {
+    // Budgets are compared against spend already converted into base, so the limit has to be in
+    // base too — but the form should still be able to reopen showing "250 EUR".
+    const built = buildBudget(
+      draft({ entry: entry({ entryCurrency: 'EUR', rateText: '1.08' }) }),
+    )
+    expect(built).toMatchObject({
+      limit: { minor: 27000, currency: 'USD' },
+      fx: { enteredAmount: { minor: 25000, currency: 'EUR' }, rate: 1.08 },
+    })
+  })
+
+  it('carries the rollover flag through and never starts archived', () => {
+    expect(buildBudget(draft({ rollover: true }))).toMatchObject({
+      rollover: true,
+      archived: false,
+    })
+  })
+
+  it('refuses to build without the rate it needs, rather than guessing one', () => {
+    expect(buildBudget(draft({ entry: entry({ entryCurrency: 'EUR' }) }))).toBeNull()
+  })
+
+  it('refuses an incomplete form', () => {
+    expect(buildBudget(draft({ categoryId: null }))).toBeNull()
+    expect(buildBudget(draft({ entry: entry({ amountText: '' }) }))).toBeNull()
   })
 })
