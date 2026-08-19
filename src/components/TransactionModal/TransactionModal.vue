@@ -39,10 +39,22 @@ import { close, swapHorizontalOutline, trashOutline } from 'ionicons/icons'
 import CurrencyPicker from '../CurrencyPicker/CurrencyPicker.vue'
 import type { CurrencyCode } from '@/domain/currency'
 import { amountPlaceholder, formatMoney, formatRate } from '@/domain/format'
-import { convert, isValidRate } from '@/domain/fx'
-import { parseMoney, toDecimalString, zero } from '@/domain/money'
+import { toDecimalString, zero } from '@/domain/money'
 import { todayIso } from '@/domain/period'
 import type { Id, Transaction, TransactionType } from '@/domain/types'
+import { inverseRate } from '@/domain/fx'
+import { parseRate } from '@/services/fx'
+import {
+  type TransactionDraft,
+  buildTransaction,
+  canSaveDraft,
+  needsRate as entryNeedsRate,
+  rateFrom as rateFromOf,
+  rateTextFor,
+  rateTo as rateToOf,
+  resolveDraft,
+  walletCurrency as walletCurrencyOf,
+} from '@/services/transactions'
 import { useBudgetStore } from '@/stores/budget'
 
 const props = defineProps<{
@@ -71,12 +83,26 @@ const pickerOpen = ref(false)
 
 const editing = computed(() => props.transaction !== null)
 
-const wallet = computed(() => (walletId.value ? store.walletsById.get(walletId.value) : undefined))
-const toWallet = computed(() =>
-  toWalletId.value ? store.walletsById.get(toWalletId.value) : undefined,
-)
+/**
+ * The form as one value, so every rule below is a plain function of it. Assembled inside a
+ * computed rather than hoisted, or the primitives would freeze at setup.
+ */
+const draft = computed<TransactionDraft>(() => ({
+  type: type.value,
+  base: store.base,
+  walletId: walletId.value,
+  toWalletId: toWalletId.value,
+  categoryId: categoryId.value,
+  amountText: amountText.value,
+  entryCurrency: entryCurrency.value,
+  rateText: rateText.value,
+  date: date.value,
+  note: note.value,
+  recurringRuleId: props.transaction?.recurringRuleId ?? null,
+  goalId: props.transaction?.goalId ?? null,
+}))
 
-const walletCurrency = computed<CurrencyCode>(() => wallet.value?.currency ?? store.base)
+const walletCurrency = computed<CurrencyCode>(() => walletCurrencyOf(draft.value, store.wallets))
 
 const availableCategories = computed(() =>
   type.value === 'income' ? store.incomeCategories : store.expenseCategories,
@@ -84,61 +110,21 @@ const availableCategories = computed(() =>
 
 const transferTargets = computed(() => store.wallets.filter((w) => w.id !== walletId.value))
 
-/**
- * True when a rate is needed: the entered currency differs from the wallet's (income and
- * expense), or the two wallets differ (transfer).
- */
-const needsRate = computed(() => {
-  if (type.value === 'transfer') {
-    return Boolean(wallet.value && toWallet.value && wallet.value.currency !== toWallet.value.currency)
-  }
-  return entryCurrency.value !== walletCurrency.value
-})
+const needsRate = computed(() => entryNeedsRate(draft.value, store.wallets))
+const rateFrom = computed<CurrencyCode>(() => rateFromOf(draft.value, store.wallets))
+const rateTo = computed<CurrencyCode>(() => rateToOf(draft.value, store.wallets))
 
-const rateFrom = computed<CurrencyCode>(() =>
-  type.value === 'transfer' ? walletCurrency.value : entryCurrency.value,
-)
+const rate = computed(() => parseRate(rateText.value))
 
-const rateTo = computed<CurrencyCode>(() =>
-  type.value === 'transfer' ? (toWallet.value?.currency ?? store.base) : walletCurrency.value,
-)
+/** Entered amount, what lands in the wallet, what arrives on a transfer, and rate validity. */
+const resolved = computed(() => resolveDraft(draft.value, store.wallets))
 
-const rate = computed(() => Number(rateText.value.replace(',', '.')))
+const rateValid = computed(() => resolved.value?.rateOk ?? !needsRate.value)
+const enteredMoney = computed(() => resolved.value?.entered ?? null)
+const resolvedAmount = computed(() => resolved.value?.amount ?? null)
+const resolvedToAmount = computed(() => resolved.value?.toAmount ?? null)
 
-const rateValid = computed(() => !needsRate.value || isValidRate(rate.value))
-
-const enteredMoney = computed(() =>
-  parseMoney(amountText.value, type.value === 'transfer' ? walletCurrency.value : entryCurrency.value),
-)
-
-/** What actually lands in the wallet, after any conversion. */
-const resolvedAmount = computed(() => {
-  const entered = enteredMoney.value
-  if (!entered) return null
-  if (type.value === 'transfer') return entered
-  if (!needsRate.value) return entered
-  if (!rateValid.value) return null
-  return convert(entered, walletCurrency.value, rate.value)
-})
-
-/** What arrives in the destination wallet on a transfer. */
-const resolvedToAmount = computed(() => {
-  if (type.value !== 'transfer') return null
-  const entered = enteredMoney.value
-  if (!entered) return null
-  if (!needsRate.value) return entered
-  if (!rateValid.value) return null
-  return convert(entered, rateTo.value, rate.value)
-})
-
-const canSave = computed(
-  () =>
-    Boolean(walletId.value) &&
-    Boolean(enteredMoney.value) &&
-    enteredMoney.value!.minor > 0 &&
-    (type.value !== 'transfer' || Boolean(toWalletId.value)) &&
-    rateValid.value,
-)
+const canSave = computed(() => canSaveDraft(draft.value, store.wallets))
 
 // Default the entry currency to the wallet's, which is right the vast majority of the time.
 watch(walletId, () => {
@@ -166,14 +152,11 @@ function load(): void {
     if (tx.fx) {
       entryCurrency.value = tx.fx.enteredAmount.currency
       amountText.value = toDecimalString(tx.fx.enteredAmount)
-      rateText.value = String(tx.fx.rate)
     } else {
       entryCurrency.value = tx.amount.currency
       amountText.value = toDecimalString(tx.amount)
-      if (tx.type === 'transfer' && tx.toAmount && tx.toAmount.currency !== tx.amount.currency) {
-        rateText.value = String(tx.toAmount.minor / tx.amount.minor)
-      }
     }
+    rateText.value = rateTextFor(tx)
   } else {
     type.value = props.initialType ?? 'expense'
     walletId.value = store.wallets[0]?.id ?? null
@@ -198,9 +181,12 @@ function pickCurrency(code: CurrencyCode): void {
 }
 
 async function save(): Promise<void> {
-  const entered = enteredMoney.value
-  const resolved = resolvedAmount.value
-  if (!entered || !resolved || !walletId.value) {
+  // Guard order mirrors the previous implementation exactly, including the consequence that a
+  // non-transfer missing its rate reports the amount message rather than the rate one — its
+  // resolved amount is null, so it fails this check first. Preserved so this commit is a no-op;
+  // see the note in the commit message.
+  const state = resolved.value
+  if (!state || state.amount === null || walletId.value === null) {
     error.value = 'Enter an amount and choose a wallet.'
     return
   }
@@ -209,30 +195,13 @@ async function save(): Promise<void> {
     return
   }
 
+  const payload = buildTransaction(draft.value, store.wallets)
+  if (!payload) return
+
   saving.value = true
   try {
-    const payload = {
-      type: type.value,
-      amount: resolved,
-      fx:
-        type.value !== 'transfer' && needsRate.value
-          ? { enteredAmount: entered, rate: rate.value }
-          : null,
-      walletId: walletId.value,
-      toWalletId: type.value === 'transfer' ? toWalletId.value : null,
-      toAmount: type.value === 'transfer' ? resolvedToAmount.value : null,
-      categoryId: type.value === 'transfer' ? null : categoryId.value,
-      date: date.value.slice(0, 10),
-      note: note.value.trim(),
-      recurringRuleId: props.transaction?.recurringRuleId ?? null,
-      goalId: props.transaction?.goalId ?? null,
-    }
-
     if (props.transaction) {
-      await store.editTransaction({
-        ...props.transaction,
-        ...payload,
-      })
+      await store.editTransaction({ ...props.transaction, ...payload })
     } else {
       await store.addTransaction(payload)
     }
@@ -372,8 +341,8 @@ async function remove(): Promise<void> {
           placeholder="0.00"
         />
       </IonItem>
-      <div v-if="rateValid && rate > 0" class="fx-card__preview">
-        <span class="app-muted">1 {{ rateTo }} = {{ formatRate(1 / rate) }} {{ rateFrom }}</span>
+      <div v-if="rateValid && rate !== null" class="fx-card__preview">
+        <span class="app-muted">1 {{ rateTo }} = {{ formatRate(inverseRate(rate)) }} {{ rateFrom }}</span>
         <template v-if="type === 'transfer' && resolvedToAmount">
           <strong>
             {{ formatMoney(enteredMoney ?? zero(walletCurrency)) }} →
