@@ -5,8 +5,9 @@
  * same wallet, which is the whole reason `formatMoney` owns its own symbol table.
  */
 import { computed } from 'vue'
-import { formatMoney, formatMoneyCompact } from '@/domain/format'
 import type { Money } from '@/domain/money'
+
+import { moneyText, moneyTone } from './utils'
 
 const props = withDefaults(
   defineProps<{
@@ -31,18 +32,16 @@ const props = withDefaults(
 )
 
 const text = computed(() =>
-  props.compact
-    ? formatMoneyCompact(props.value)
-    : formatMoney(props.value, { signed: props.signed, showCode: props.showCode }),
+  moneyText(props.value, {
+    compact: props.compact,
+    signed: props.signed,
+    showCode: props.showCode,
+  }),
 )
 
-const tone = computed(() => {
-  if (!props.colored) return ''
-  if (props.negativeMeaning) return props.value.minor === 0 ? '' : 'tone-negative'
-  if (props.value.minor > 0) return 'tone-positive'
-  if (props.value.minor < 0) return 'tone-negative'
-  return ''
-})
+const tone = computed(() =>
+  moneyTone(props.value, { colored: props.colored, negativeMeaning: props.negativeMeaning }),
+)
 </script>
 
 <template>

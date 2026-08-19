@@ -9,6 +9,8 @@
  */
 import { computed } from 'vue'
 
+import { fillColor as colorFor, fillWidth, paceOffset } from './utils'
+
 const props = withDefaults(
   defineProps<{
     /** 0–100, may exceed 100. */
@@ -22,13 +24,9 @@ const props = withDefaults(
   { color: 'primary', pace: null, over: false },
 )
 
-const width = computed(() => `${Math.min(100, Math.max(0, props.percent))}%`)
+const width = computed(() => fillWidth(props.percent))
 
-const fillColor = computed(() => {
-  if (props.over) return 'var(--ion-color-danger)'
-  if (props.percent >= 85) return 'var(--ion-color-warning)'
-  return `var(--ion-color-${props.color})`
-})
+const fillColor = computed(() => colorFor(props.percent, props.over, props.color))
 </script>
 
 <template>
@@ -36,7 +34,7 @@ const fillColor = computed(() => {
     <div class="app-meter">
       <div class="app-meter__fill" :style="{ width, background: fillColor }" />
     </div>
-    <div v-if="pace !== null" class="meter-pace" :style="{ left: `${Math.min(100, pace * 100)}%` }" />
+    <div v-if="pace !== null" class="meter-pace" :style="{ left: paceOffset(pace) }" />
   </div>
 </template>
 

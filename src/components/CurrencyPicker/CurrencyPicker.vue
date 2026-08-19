@@ -23,13 +23,9 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import { checkmark, close } from 'ionicons/icons'
-import {
-  type CurrencyCode,
-  type CurrencyDef,
-  CURRENCIES,
-  POPULAR_CURRENCY_CODES,
-  searchCurrencies,
-} from '@/domain/currency'
+import { type CurrencyCode, type CurrencyDef, searchCurrencies } from '@/domain/currency'
+
+import { favouriteDefs, isSearching, popularDefs } from './utils'
 
 const props = defineProps<{
   selected: CurrencyCode
@@ -42,18 +38,11 @@ const emit = defineEmits<{ select: [code: CurrencyCode]; dismiss: [] }>()
 
 const query = ref('')
 
-const searching = computed(() => query.value.trim().length > 0)
+const searching = computed(() => isSearching(query.value))
 const results = computed(() => searchCurrencies(query.value))
 
-const favouriteDefs = computed<CurrencyDef[]>(() =>
-  (props.favourites ?? []).map((c) => CURRENCIES[c]).filter(Boolean),
-)
-
-const popularDefs = computed<CurrencyDef[]>(() =>
-  POPULAR_CURRENCY_CODES.filter((c) => !(props.favourites ?? []).includes(c)).map(
-    (c) => CURRENCIES[c],
-  ),
-)
+const favourites = computed<CurrencyDef[]>(() => favouriteDefs(props.favourites))
+const popular = computed<CurrencyDef[]>(() => popularDefs(props.favourites))
 
 function choose(code: string): void {
   emit('select', code as CurrencyCode)
@@ -101,10 +90,10 @@ function choose(code: string): void {
     </IonList>
 
     <template v-else>
-      <IonList v-if="favouriteDefs.length" lines="full">
+      <IonList v-if="favourites.length" lines="full">
         <IonListHeader>Your currencies</IonListHeader>
         <IonItem
-          v-for="def in favouriteDefs"
+          v-for="def in favourites"
           :key="`fav-${def.code}`"
           button
           :detail="false"
@@ -121,7 +110,7 @@ function choose(code: string): void {
       <IonList lines="full">
         <IonListHeader>Commonly used</IonListHeader>
         <IonItem
-          v-for="def in popularDefs"
+          v-for="def in popular"
           :key="`pop-${def.code}`"
           button
           :detail="false"
