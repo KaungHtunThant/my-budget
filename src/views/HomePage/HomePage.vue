@@ -37,38 +37,39 @@ import PeriodSwitcher from '@/components/PeriodSwitcher/PeriodSwitcher.vue'
 import ProgressMeter from '@/components/ProgressMeter/ProgressMeter.vue'
 import TransactionModal from '@/components/TransactionModal/TransactionModal.vue'
 import TransactionRow from '@/components/TransactionRow/TransactionRow.vue'
+import { useBudgetContext } from '@/composables/useBudgetContext'
 import { formatMoneyCompact } from '@/domain/format'
-import { toFloat } from '@/domain/money'
-import { periodProgress, todayIso, daysRemaining } from '@/domain/period'
+import { todayIso } from '@/domain/period'
 import type { Transaction } from '@/domain/types'
 import { useBudgetStore } from '@/stores/budget'
 
+import { homeView } from './utils'
+
 const store = useBudgetStore()
 const router = useRouter()
+const { ctx, period } = useBudgetContext()
 
 const modalOpen = ref(false)
 const editing = ref<Transaction | null>(null)
 
-const pace = computed(() => periodProgress(store.period, todayIso()))
-const daysLeft = computed(() => daysRemaining(store.period, todayIso()))
-
-const topBudgets = computed(() => store.budgetStatusList.slice(0, 4))
-const topGoals = computed(() => store.goalStatusList.filter((g) => !g.goal.archived).slice(0, 2))
-
-/** Bar heights for the six-period trend, scaled to the largest value on show. */
-const trendBars = computed(() => {
-  const peak = Math.max(
-    1,
-    ...store.trend.flatMap((t) => [toFloat(t.income), toFloat(t.expense)]),
-  )
-  return store.trend.map((t) => ({
-    label: t.period.label.split(' ')[0].slice(0, 3),
-    income: t.income,
-    expense: t.expense,
-    incomeHeight: `${(toFloat(t.income) / peak) * 100}%`,
-    expenseHeight: `${(toFloat(t.expense) / peak) * 100}%`,
-  }))
-})
+// Built inside the computed on purpose: hoisting the literal would freeze the primitives, so
+// the screen would stop following the period switcher while its arrays kept updating.
+const view = computed(() =>
+  homeView({
+    wallets: store.wallets,
+    balances: store.balances,
+    transactions: store.transactions,
+    categories: store.categories,
+    budgets: store.budgets,
+    goals: store.goals,
+    base: store.base,
+    ctx: ctx.value,
+    period: period.value,
+    periodConfig: store.periodConfig,
+    periodOffset: store.periodOffset,
+    today: todayIso(),
+  }),
+)
 
 function openNew(): void {
   editing.value = null
@@ -115,18 +116,18 @@ async function refresh(event: CustomEvent): Promise<void> {
         <!-- Balances -->
         <div class="app-card hero">
           <span class="app-muted hero__label">Total balance</span>
-          <MoneyText :value="store.netWorth.total" class="app-figure--hero" />
+          <MoneyText :value="view.netWorth.total" class="app-figure--hero" />
 
           <button
-            v-if="store.netWorth.missing.length"
+            v-if="view.netWorth.missing.length"
             class="warn"
             type="button"
             @click="router.push('/currencies')"
           >
             <IonIcon :icon="alertCircleOutline" />
             <span>
-              {{ store.netWorth.missing.join(', ') }} not included — set
-              {{ store.netWorth.missing.length === 1 ? 'a rate' : 'rates' }}
+              {{ view.netWorth.missing.join(', ') }} not included — set
+              {{ view.netWorth.missing.length === 1 ? 'a rate' : 'rates' }}
             </span>
           </button>
 
@@ -146,49 +147,49 @@ async function refresh(event: CustomEvent): Promise<void> {
 
         <!-- This cycle -->
         <div class="app-card">
-          <PeriodSwitcher :period="store.period" />
+          <PeriodSwitcher :period="period" />
           <div class="cycle-figures">
             <div class="cycle-figure">
               <span class="app-muted"><IonIcon :icon="trendingUpOutline" /> Income</span>
-              <MoneyText :value="store.currentSummary.income" class="app-figure--large" />
+              <MoneyText :value="view.summary.income" class="app-figure--large" />
             </div>
             <div class="cycle-figure">
               <span class="app-muted"><IonIcon :icon="trendingDownOutline" /> Spent</span>
-              <MoneyText :value="store.currentSummary.expense" class="app-figure--large" />
+              <MoneyText :value="view.summary.expense" class="app-figure--large" />
             </div>
           </div>
           <div class="cycle-net">
             <span class="app-muted">Net this cycle</span>
-            <MoneyText :value="store.currentSummary.net" colored signed />
+            <MoneyText :value="view.summary.net" colored signed />
           </div>
           <p v-if="store.isCurrentPeriod" class="app-muted cycle-days">
-            {{ daysLeft }} {{ daysLeft === 1 ? 'day' : 'days' }} left in this cycle
+            {{ view.daysLeft }} {{ view.daysLeft === 1 ? 'day' : 'days' }} left in this cycle
           </p>
         </div>
 
         <!-- Budgets -->
-        <template v-if="topBudgets.length">
+        <template v-if="view.topBudgets.length">
           <div class="app-section-title">Budgets</div>
           <div class="app-card">
             <div class="app-row-split budget-total">
               <span class="app-muted">
-                <MoneyText :value="store.budgetSummary.spent" /> of
-                <MoneyText :value="store.budgetSummary.budgeted" />
+                <MoneyText :value="view.budgetSummary.spent" /> of
+                <MoneyText :value="view.budgetSummary.budgeted" />
               </span>
               <MoneyText
-                :value="store.budgetSummary.remaining"
+                :value="view.budgetSummary.remaining"
                 :colored="true"
               />
             </div>
             <ProgressMeter
-              :percent="store.budgetSummary.percentUsed"
-              :pace="store.isCurrentPeriod ? pace : null"
-              :over="store.budgetSummary.remaining.minor < 0"
+              :percent="view.budgetSummary.percentUsed"
+              :pace="view.pace"
+              :over="view.budgetSummary.remaining.minor < 0"
             />
 
             <div class="budget-rows">
               <button
-                v-for="status in topBudgets"
+                v-for="status in view.topBudgets"
                 :key="status.budget.id"
                 class="budget-row"
                 type="button"
@@ -220,12 +221,12 @@ async function refresh(event: CustomEvent): Promise<void> {
         <div class="app-section-title">Last 6 cycles</div>
         <div class="app-card">
           <div class="trend">
-            <div v-for="bar in trendBars" :key="bar.label" class="trend__col">
+            <div v-for="bar in view.columns" :key="bar.label" class="trend__col">
               <div class="trend__bars">
                 <div class="trend__bar trend__bar--income" :style="{ height: bar.incomeHeight }" />
                 <div class="trend__bar trend__bar--expense" :style="{ height: bar.expenseHeight }" />
               </div>
-              <span class="trend__label app-muted">{{ bar.label }}</span>
+              <span class="trend__label app-muted">{{ bar.short }}</span>
             </div>
           </div>
           <div class="trend__legend app-muted">
@@ -239,11 +240,11 @@ async function refresh(event: CustomEvent): Promise<void> {
         </div>
 
         <!-- Goals -->
-        <template v-if="topGoals.length">
+        <template v-if="view.topGoals.length">
           <div class="app-section-title">Savings goals</div>
           <div class="app-card">
             <button
-              v-for="status in topGoals"
+              v-for="status in view.topGoals"
               :key="status.goal.id"
               class="goal-row"
               type="button"
@@ -268,10 +269,10 @@ async function refresh(event: CustomEvent): Promise<void> {
 
         <!-- Recent activity -->
         <div class="app-section-title">Recent activity</div>
-        <div v-if="store.recentTransactions.length" class="app-card app-card--flush">
+        <div v-if="view.recent.length" class="app-card app-card--flush">
           <IonList lines="full">
             <TransactionRow
-              v-for="tx in store.recentTransactions"
+              v-for="tx in view.recent"
               :key="tx.id"
               :transaction="tx"
               @select="openEdit"
