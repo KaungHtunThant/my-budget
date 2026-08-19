@@ -11,11 +11,12 @@ import { IonIcon, IonItem, IonLabel, IonNote } from '@ionic/vue'
 import { arrowForwardOutline, swapHorizontalOutline } from 'ionicons/icons'
 import { iconFor } from '@/theme/icons'
 import MoneyText from '../MoneyText/MoneyText.vue'
-import { formatMoney, formatRelativeDate } from '@/domain/format'
-import { negate } from '@/domain/money'
+import { formatMoney } from '@/domain/format'
 import { todayIso } from '@/domain/period'
 import type { Transaction } from '@/domain/types'
 import { useBudgetStore } from '@/stores/budget'
+
+import { displayAmount as signedForDisplay, rowColor, rowSubtitle, rowTitle } from './utils'
 
 const props = defineProps<{ transaction: Transaction; showDate?: boolean }>()
 const emit = defineEmits<{ select: [tx: Transaction] }>()
@@ -35,22 +36,18 @@ const goal = computed(() =>
   props.transaction.goalId ? store.goalsById.get(props.transaction.goalId) : undefined,
 )
 
-const title = computed(() => {
-  const tx = props.transaction
-  if (tx.type === 'transfer') {
-    return goal.value ? goal.value.name : `${wallet.value?.name ?? '—'} → ${toWallet.value?.name ?? '—'}`
-  }
-  return category.value?.name ?? 'Uncategorised'
-})
+const entities = computed(() => ({
+  category: category.value,
+  wallet: wallet.value,
+  toWallet: toWallet.value,
+  goal: goal.value,
+}))
 
-const subtitle = computed(() => {
-  const tx = props.transaction
-  const parts: string[] = []
-  if (props.showDate !== false) parts.push(formatRelativeDate(tx.date, todayIso()))
-  if (tx.type !== 'transfer' && wallet.value) parts.push(wallet.value.name)
-  if (tx.note) parts.push(tx.note)
-  return parts.join(' · ')
-})
+const title = computed(() => rowTitle(props.transaction, entities.value))
+
+const subtitle = computed(() =>
+  rowSubtitle(props.transaction, entities.value, todayIso(), props.showDate !== false),
+)
 
 const icon = computed(() => {
   if (props.transaction.type === 'transfer') {
@@ -59,16 +56,10 @@ const icon = computed(() => {
   return category.value ? iconFor(category.value.icon) : arrowForwardOutline
 })
 
-const color = computed(() => {
-  if (props.transaction.type === 'transfer') return goal.value?.color ?? 'medium'
-  if (props.transaction.type === 'income') return 'success'
-  return category.value?.color ?? 'medium'
-})
+const color = computed(() => rowColor(props.transaction, entities.value))
 
 /** Expenses read as negative on screen even though they are stored as positive amounts. */
-const displayAmount = computed(() =>
-  props.transaction.type === 'expense' ? negate(props.transaction.amount) : props.transaction.amount,
-)
+const displayAmount = computed(() => signedForDisplay(props.transaction))
 </script>
 
 <template>
