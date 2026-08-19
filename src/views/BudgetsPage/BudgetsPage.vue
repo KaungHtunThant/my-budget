@@ -6,6 +6,7 @@
  * different on day 3 than on day 28, and the marker makes that readable at a glance.
  */
 import { computed, ref } from 'vue'
+import { useBudgetContext } from '@/composables/useBudgetContext'
 import {
   IonButton,
   IonButtons,
@@ -35,11 +36,14 @@ import PeriodSwitcher from '@/components/PeriodSwitcher/PeriodSwitcher.vue'
 import ProgressMeter from '@/components/ProgressMeter/ProgressMeter.vue'
 import { amountPlaceholder, formatMoney } from '@/domain/format'
 import { parseMoney, toDecimalString } from '@/domain/money'
-import { describePeriodConfig, periodProgress, todayIso } from '@/domain/period'
+import { describePeriodConfig, todayIso } from '@/domain/period'
 import type { Budget, BudgetStatus, Id } from '@/domain/types'
 import { useBudgetStore } from '@/stores/budget'
 
+import { availableCategories as pickableCategories, budgetsView, canSaveBudget } from './utils'
+
 const store = useBudgetStore()
+const { ctx, period } = useBudgetContext()
 
 const modalOpen = ref(false)
 const editingId = ref<Id | null>(null)
@@ -47,18 +51,26 @@ const formCategoryId = ref<Id | null>(null)
 const formLimit = ref('')
 const formRollover = ref(false)
 
-const pace = computed(() => (store.isCurrentPeriod ? periodProgress(store.period, todayIso()) : null))
+const view = computed(() =>
+  budgetsView({
+    budgets: store.budgets,
+    categories: store.categories,
+    transactions: store.transactions,
+    base: store.base,
+    ctx: ctx.value,
+    period: period.value,
+    periodConfig: store.periodConfig,
+    periodOffset: store.periodOffset,
+    today: todayIso(),
+  }),
+)
 
 /** Categories without a budget yet — the only sensible options when adding one. */
-const availableCategories = computed(() => {
-  const used = new Set(store.budgets.map((b) => b.categoryId))
-  return store.expenseCategories.filter((c) => !used.has(c.id) || c.id === formCategoryId.value)
-})
+const availableCategories = computed(() =>
+  pickableCategories(store.expenseCategories, store.budgets, formCategoryId.value),
+)
 
-const canSave = computed(() => {
-  const parsed = parseMoney(formLimit.value, store.base)
-  return Boolean(formCategoryId.value) && parsed !== null && parsed.minor > 0
-})
+const canSave = computed(() => canSaveBudget(formCategoryId.value, formLimit.value, store.base))
 
 function openNew(): void {
   editingId.value = null
@@ -117,12 +129,12 @@ async function remove(): Promise<void> {
 
     <IonContent class="app-content">
       <div class="app-card">
-        <PeriodSwitcher :period="store.period" />
+        <PeriodSwitcher :period="period" />
         <IonNote class="cycle-note">{{ describePeriodConfig(store.periodConfig) }}</IonNote>
       </div>
 
       <EmptyState
-        v-if="store.budgetStatusList.length === 0"
+        v-if="view.statuses.length === 0"
         :icon="pieChartOutline"
         title="No budgets set"
         message="Set a spending limit on a category and this screen will show how much of it you have used each cycle."
@@ -135,36 +147,36 @@ async function remove(): Promise<void> {
           <div class="summary__figures">
             <div>
               <span class="app-muted">Budgeted</span>
-              <MoneyText :value="store.budgetSummary.budgeted" class="app-figure--large" />
+              <MoneyText :value="view.summary.budgeted" class="app-figure--large" />
             </div>
             <div>
               <span class="app-muted">Spent</span>
-              <MoneyText :value="store.budgetSummary.spent" class="app-figure--large" />
+              <MoneyText :value="view.summary.spent" class="app-figure--large" />
             </div>
             <div>
               <span class="app-muted">Left</span>
               <MoneyText
-                :value="store.budgetSummary.remaining"
+                :value="view.summary.remaining"
                 colored
                 class="app-figure--large"
               />
             </div>
           </div>
           <ProgressMeter
-            :percent="store.budgetSummary.percentUsed"
-            :pace="pace"
-            :over="store.budgetSummary.remaining.minor < 0"
+            :percent="view.summary.percentUsed"
+            :pace="view.pace"
+            :over="view.summary.remaining.minor < 0"
           />
-          <p v-if="store.budgetSummary.overspentCount" class="over-note">
-            {{ store.budgetSummary.overspentCount }}
-            {{ store.budgetSummary.overspentCount === 1 ? 'budget is' : 'budgets are' }} over limit.
+          <p v-if="view.summary.overspentCount" class="over-note">
+            {{ view.summary.overspentCount }}
+            {{ view.summary.overspentCount === 1 ? 'budget is' : 'budgets are' }} over limit.
           </p>
         </div>
 
         <div class="app-section-title">By category</div>
         <div class="app-card">
           <button
-            v-for="status in store.budgetStatusList"
+            v-for="status in view.statuses"
             :key="status.budget.id"
             class="row"
             type="button"
@@ -180,7 +192,7 @@ async function remove(): Promise<void> {
             <ProgressMeter
               :percent="status.percentUsed"
               :color="status.category.color"
-              :pace="pace"
+              :pace="view.pace"
               :over="status.overspent"
             />
             <div class="row__detail app-muted">

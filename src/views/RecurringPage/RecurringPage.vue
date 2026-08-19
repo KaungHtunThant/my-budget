@@ -41,7 +41,16 @@ import { amountPlaceholder } from '@/domain/format'
 import { parseMoney, toDecimalString } from '@/domain/money'
 import { WEEKDAY_NAMES, todayIso } from '@/domain/period'
 import type { Id, RecurrenceFrequency, RecurringRule, TransactionType } from '@/domain/types'
+import { transactionFromRule } from '@/services/recurring'
 import { useBudgetStore } from '@/stores/budget'
+
+import {
+  buildRule,
+  canSaveRule,
+  describeRule,
+  monthlyCommitment,
+  usesWeekday as anchoredToWeekday,
+} from './utils'
 
 const store = useBudgetStore()
 
@@ -64,57 +73,21 @@ const FREQUENCIES: { value: RecurrenceFrequency; label: string }[] = [
   { value: 'yearly', label: 'Yearly' },
 ]
 
-const usesWeekday = computed(() => frequency.value === 'weekly' || frequency.value === 'fortnightly')
+const usesWeekday = computed(() => anchoredToWeekday(frequency.value))
 
-const canSave = computed(() => {
-  const parsed = parseMoney(amountText.value, store.base)
-  return name.value.trim().length > 0 && parsed !== null && parsed.minor > 0 && Boolean(walletId.value)
-})
+const canSave = computed(() =>
+  canSaveRule(name.value, amountText.value, walletId.value, store.base),
+)
 
 const availableCategories = computed(() =>
   type.value === 'income' ? store.incomeCategories : store.expenseCategories,
 )
 
 /** Monthly-equivalent totals, so the commitment is visible as one figure. */
-const monthlyCommitment = computed(() => {
-  const perMonth = (rule: RecurringRule): number => {
-    const factor =
-      rule.frequency === 'weekly'
-        ? 52 / 12
-        : rule.frequency === 'fortnightly'
-          ? 26 / 12
-          : rule.frequency === 'yearly'
-            ? 1 / 12
-            : 1
-    return Math.round(rule.amount.minor * factor)
-  }
-  const expenses = store.rules.filter((r) => r.active && r.type === 'expense')
-  const income = store.rules.filter((r) => r.active && r.type === 'income')
-  return {
-    expense: { minor: expenses.reduce((a, r) => a + perMonth(r), 0), currency: store.base },
-    income: { minor: income.reduce((a, r) => a + perMonth(r), 0), currency: store.base },
-  }
-})
+const commitment = computed(() => monthlyCommitment(store.rules, store.base))
 
 function describe(rule: RecurringRule): string {
-  const parts: string[] = []
-  switch (rule.frequency) {
-    case 'weekly':
-      parts.push(`Every ${WEEKDAY_NAMES[rule.weekday ?? 1]}`)
-      break
-    case 'fortnightly':
-      parts.push(`Every 2 weeks on ${WEEKDAY_NAMES[rule.weekday ?? 1]}`)
-      break
-    case 'monthly':
-      parts.push(`Monthly on day ${rule.dayOfMonth ?? 1}`)
-      break
-    case 'yearly':
-      parts.push(`Yearly on day ${rule.dayOfMonth ?? 1}`)
-      break
-  }
-  const wallet = store.walletsById.get(rule.walletId)
-  if (wallet) parts.push(wallet.name)
-  return parts.join(' · ')
+  return describeRule(rule, store.walletsById.get(rule.walletId))
 }
 
 function openNew(): void {
@@ -149,22 +122,18 @@ async function save(): Promise<void> {
   const amount = parseMoney(amountText.value, store.base)
   if (!amount || !walletId.value) return
 
-  const payload = {
-    name: name.value.trim(),
+  const payload = buildRule({
+    name: name.value,
     type: type.value,
     amount,
     walletId: walletId.value,
-    toWalletId: null,
-    categoryId: type.value === 'transfer' ? null : categoryId.value,
+    categoryId: categoryId.value,
     frequency: frequency.value,
-    dayOfMonth: usesWeekday.value ? null : dayOfMonth.value,
-    weekday: usesWeekday.value ? weekday.value : null,
-    startDate: todayIso(),
-    endDate: null,
-    lastRunDate: null,
+    dayOfMonth: dayOfMonth.value,
+    weekday: weekday.value,
     active: active.value,
-    note: '',
-  }
+    today: todayIso(),
+  })
 
   if (editingId.value) {
     const existing = store.rules.find((r) => r.id === editingId.value)
@@ -186,19 +155,7 @@ async function toggleActive(rule: RecurringRule): Promise<void> {
 
 /** Record this rule's transaction today — a manual stand-in for scheduled generation. */
 async function addNow(rule: RecurringRule): Promise<void> {
-  await store.addTransaction({
-    type: rule.type,
-    amount: rule.amount,
-    fx: null,
-    walletId: rule.walletId,
-    toWalletId: rule.toWalletId,
-    toAmount: null,
-    categoryId: rule.categoryId,
-    date: todayIso(),
-    note: rule.name,
-    recurringRuleId: rule.id,
-    goalId: null,
-  })
+  await store.addTransaction(transactionFromRule(rule, todayIso()))
 }
 </script>
 
@@ -227,11 +184,11 @@ async function addNow(rule: RecurringRule): Promise<void> {
         <div class="app-card app-grid-2">
           <div>
             <span class="app-muted">Committed monthly</span>
-            <MoneyText :value="monthlyCommitment.expense" class="app-figure--large" />
+            <MoneyText :value="commitment.expense" class="app-figure--large" />
           </div>
           <div>
             <span class="app-muted">Expected monthly</span>
-            <MoneyText :value="monthlyCommitment.income" class="app-figure--large" />
+            <MoneyText :value="commitment.income" class="app-figure--large" />
           </div>
         </div>
 

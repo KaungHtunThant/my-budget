@@ -7,6 +7,7 @@
  * separate parallel balance that could drift from reality.
  */
 import { computed, ref } from 'vue'
+import { useBudgetContext } from '@/composables/useBudgetContext'
 import {
   IonButton,
   IonButtons,
@@ -34,10 +35,22 @@ import MoneyText from '@/components/MoneyText/MoneyText.vue'
 import ProgressMeter from '@/components/ProgressMeter/ProgressMeter.vue'
 import { amountPlaceholder, formatDate, formatMoney } from '@/domain/format'
 import { parseMoney, toDecimalString } from '@/domain/money'
+import { goalStatuses } from '@/domain/budgeting'
+import { todayIso } from '@/domain/period'
 import type { GoalStatus, Id } from '@/domain/types'
 import { useBudgetStore } from '@/stores/budget'
 
+import {
+  activeGoals,
+  canContribute as canContributeNow,
+  canSaveGoal,
+  completedGoals,
+  defaultContributionWallet,
+  defaultGoalWallet,
+} from './utils'
+
 const store = useBudgetStore()
+const { ctx } = useBudgetContext()
 
 const modalOpen = ref(false)
 const contributeOpen = ref(false)
@@ -54,24 +67,26 @@ const contributeText = ref('')
 
 const ICONS = GOAL_ICON_NAMES
 
-const canSave = computed(() => {
-  const parsed = parseMoney(targetText.value, store.base)
-  return name.value.trim().length > 0 && parsed !== null && parsed.minor > 0 && Boolean(walletId.value)
-})
+const statuses = computed(() =>
+  goalStatuses(store.goals, store.transactions, ctx.value, todayIso(), store.periodConfig),
+)
 
-const canContribute = computed(() => {
-  const parsed = parseMoney(contributeText.value, store.base)
-  return parsed !== null && parsed.minor > 0 && Boolean(contributeFromWalletId.value)
-})
+const canSave = computed(() =>
+  canSaveGoal(name.value, targetText.value, walletId.value, store.base),
+)
 
-const active = computed(() => store.goalStatusList.filter((s) => !s.complete))
-const done = computed(() => store.goalStatusList.filter((s) => s.complete))
+const canContribute = computed(() =>
+  canContributeNow(contributeText.value, contributeFromWalletId.value, store.base),
+)
+
+const active = computed(() => activeGoals(statuses.value))
+const done = computed(() => completedGoals(statuses.value))
 
 function openNew(): void {
   editingId.value = null
   name.value = ''
   targetText.value = ''
-  walletId.value = store.wallets.find((w) => w.kind === 'savings')?.id ?? store.wallets[0]?.id ?? null
+  walletId.value = defaultGoalWallet(store.wallets)
   targetDate.value = ''
   icon.value = 'trophy-outline'
   modalOpen.value = true
@@ -124,8 +139,7 @@ async function remove(): Promise<void> {
 
 function openContribute(status: GoalStatus): void {
   contributeGoalId.value = status.goal.id
-  contributeFromWalletId.value =
-    store.wallets.find((w) => w.id !== status.goal.walletId)?.id ?? store.wallets[0]?.id ?? null
+  contributeFromWalletId.value = defaultContributionWallet(store.wallets, status.goal)
   contributeText.value = ''
   contributeOpen.value = true
 }
@@ -148,7 +162,7 @@ async function contribute(): Promise<void> {
 
     <IonContent class="app-content">
       <EmptyState
-        v-if="store.goalStatusList.length === 0"
+        v-if="statuses.length === 0"
         :icon="trophyOutline"
         title="No goals yet"
         message="Set a target and a date, then contribute to it whenever you have money spare."
