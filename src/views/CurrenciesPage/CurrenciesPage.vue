@@ -26,7 +26,7 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import { addOutline, alertCircleOutline } from 'ionicons/icons'
-import CurrencyPicker from '@/components/CurrencyPicker.vue'
+import CurrencyPicker from '@/components/CurrencyPicker/CurrencyPicker.vue'
 import { type CurrencyCode, currency } from '@/domain/currency'
 import { formatMoney, formatRate } from '@/domain/format'
 import { fromMajor } from '@/domain/money'

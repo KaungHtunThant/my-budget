@@ -36,7 +36,7 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import { close, swapHorizontalOutline, trashOutline } from 'ionicons/icons'
-import CurrencyPicker from './CurrencyPicker.vue'
+import CurrencyPicker from '../CurrencyPicker/CurrencyPicker.vue'
 import type { CurrencyCode } from '@/domain/currency'
 import { amountPlaceholder, formatMoney, formatRate } from '@/domain/format'
 import { convert, isValidRate } from '@/domain/fx'

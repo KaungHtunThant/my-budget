@@ -31,12 +31,12 @@ import {
   trendingDownOutline,
   trendingUpOutline,
 } from 'ionicons/icons'
-import EmptyState from '@/components/EmptyState.vue'
-import MoneyText from '@/components/MoneyText.vue'
-import PeriodSwitcher from '@/components/PeriodSwitcher.vue'
-import ProgressMeter from '@/components/ProgressMeter.vue'
-import TransactionModal from '@/components/TransactionModal.vue'
-import TransactionRow from '@/components/TransactionRow.vue'
+import EmptyState from '@/components/EmptyState/EmptyState.vue'
+import MoneyText from '@/components/MoneyText/MoneyText.vue'
+import PeriodSwitcher from '@/components/PeriodSwitcher/PeriodSwitcher.vue'
+import ProgressMeter from '@/components/ProgressMeter/ProgressMeter.vue'
+import TransactionModal from '@/components/TransactionModal/TransactionModal.vue'
+import TransactionRow from '@/components/TransactionRow/TransactionRow.vue'
 import { formatMoneyCompact } from '@/domain/format'
 import { toFloat } from '@/domain/money'
 import { periodProgress, todayIso, daysRemaining } from '@/domain/period'

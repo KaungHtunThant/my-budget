@@ -35,8 +35,8 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import { addOutline, close, repeatOutline, trashOutline } from 'ionicons/icons'
-import EmptyState from '@/components/EmptyState.vue'
-import MoneyText from '@/components/MoneyText.vue'
+import EmptyState from '@/components/EmptyState/EmptyState.vue'
+import MoneyText from '@/components/MoneyText/MoneyText.vue'
 import { amountPlaceholder } from '@/domain/format'
 import { parseMoney, toDecimalString } from '@/domain/money'
 import { WEEKDAY_NAMES, todayIso } from '@/domain/period'

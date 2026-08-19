@@ -35,7 +35,7 @@ import {
   sparklesOutline,
   walletOutline,
 } from 'ionicons/icons'
-import CurrencyPicker from '@/components/CurrencyPicker.vue'
+import CurrencyPicker from '@/components/CurrencyPicker/CurrencyPicker.vue'
 import { type CurrencyCode, currency } from '@/domain/currency'
 import {
   type BudgetPeriodConfig,

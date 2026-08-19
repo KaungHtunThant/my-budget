@@ -6,30 +6,33 @@ const routes: RouteRecordRaw[] = [
   { path: '/', redirect: '/tabs/home' },
   {
     path: '/onboarding',
-    component: () => import('@/views/OnboardingPage.vue'),
+    component: () => import('@/views/OnboardingPage/OnboardingPage.vue'),
     meta: { public: true },
   },
   {
     path: '/tabs/',
-    component: () => import('@/views/TabsPage.vue'),
+    component: () => import('@/views/TabsPage/TabsPage.vue'),
     children: [
       { path: '', redirect: '/tabs/home' },
-      { path: 'home', component: () => import('@/views/HomePage.vue') },
-      { path: 'transactions', component: () => import('@/views/TransactionsPage.vue') },
-      { path: 'budgets', component: () => import('@/views/BudgetsPage.vue') },
-      { path: 'goals', component: () => import('@/views/GoalsPage.vue') },
-      { path: 'more', component: () => import('@/views/MorePage.vue') },
+      { path: 'home', component: () => import('@/views/HomePage/HomePage.vue') },
+      {
+        path: 'transactions',
+        component: () => import('@/views/TransactionsPage/TransactionsPage.vue'),
+      },
+      { path: 'budgets', component: () => import('@/views/BudgetsPage/BudgetsPage.vue') },
+      { path: 'goals', component: () => import('@/views/GoalsPage/GoalsPage.vue') },
+      { path: 'more', component: () => import('@/views/MorePage/MorePage.vue') },
       // A retired tab URL (or any typo) lands on Home rather than leaving the outlet
       // showing the previous page under a tab that no longer exists.
       { path: ':pathMatch(.*)', redirect: '/tabs/home' },
     ],
   },
-  { path: '/wallets', component: () => import('@/views/WalletsPage.vue') },
-  { path: '/categories', component: () => import('@/views/CategoriesPage.vue') },
-  { path: '/recurring', component: () => import('@/views/RecurringPage.vue') },
-  { path: '/reports', component: () => import('@/views/ReportsPage.vue') },
-  { path: '/settings', component: () => import('@/views/SettingsPage.vue') },
-  { path: '/currencies', component: () => import('@/views/CurrenciesPage.vue') },
+  { path: '/wallets', component: () => import('@/views/WalletsPage/WalletsPage.vue') },
+  { path: '/categories', component: () => import('@/views/CategoriesPage/CategoriesPage.vue') },
+  { path: '/recurring', component: () => import('@/views/RecurringPage/RecurringPage.vue') },
+  { path: '/reports', component: () => import('@/views/ReportsPage/ReportsPage.vue') },
+  { path: '/settings', component: () => import('@/views/SettingsPage/SettingsPage.vue') },
+  { path: '/currencies', component: () => import('@/views/CurrenciesPage/CurrenciesPage.vue') },
 ]
 
 const router = createRouter({
