@@ -214,12 +214,41 @@ The outcome is the same: data survives restart, behind the unchanged `Repository
 | **N1** | Repository & contract tests | `IndexedDbRepository` implementing the full interface; one contract suite asserted against it and `MemoryRepository` alike | Done |
 | **N2** | Cut over | One line in `src/stores/repository.ts`; data survives a reload | Done |
 | **N3** | Snapshot backstop | JSON snapshot with temp-then-rename and `.bak`, debounced plus flushed on background, rebuild-on-empty in `init()` | Done |
-| **D3** | Local backup UI | Share/save the snapshot payload, import with merge-or-replace, optional passphrase encryption | Next |
+| **D3** | Local backup UI | Share/save the snapshot payload, import with conflict-aware merge-or-replace | Next |
 | **D4** | Hardening & release | App lock (biometric/PIN), upgrade testing, on-device performance on large history, signed release APK |  |
 | **D5** | Google Drive backup | OAuth sign-in, appDataFolder upload/restore, optional auto-backup |  |
 
 N3 delivered the snapshot *format and file*; D3 is the user-facing half — export, share and
 import. That split is why D3 is now small.
+
+### D3 scope, decided 2026-08-20
+
+N3 left more of D3 built than the table suggests: `IndexedDbRepository.exportSnapshot()` already
+produces the portable payload, and the private `load(seed)` that rebuild-on-empty uses is already
+the replace primitive. What is actually missing is the interface surface, the merge rule, the
+validation, and the transports.
+
+- **Passphrase encryption is deferred** out of D3 into its own item (17.3). The round-trip test is
+  worth doing against a readable file first, and the format only needs an envelope field when
+  encryption actually lands.
+- **Import detects conflicts before asking anything.** A dry-run compares the incoming payload
+  against what is on the device and reports what would be added, what is identical, and what
+  collides on id with differing content. If nothing collides, merge is unambiguous and just
+  applies. If something does, the user picks **once** for the whole import — incoming wins, or
+  device wins — rather than adjudicating record by record. Replace stays available as the
+  separate, stronger action.
+- **Export leaves via `@capacitor/share`** and the native save/share sheet; **import arrives via a
+  plain `<input type="file">`**, which works in the webview and in a desktop browser, so the whole
+  import path stays testable without a device. One new dependency, not two.
+- **A snapshot from a newer `SCHEMA_VERSION` is refused**, per the versioning rule below — never
+  guessed at.
+- **14.5 "reload sample data" is removed**; **14.6 "start empty" stays** as a genuinely destructive
+  action with a stronger confirmation, alongside export and import. Loading fake data over real
+  data has no purpose worth the risk.
+
+Work order: pure validation and merge-planning functions with tests → `exportSnapshot` and
+`importSnapshot` onto the `Repository` interface, `MemoryRepository` and the contract suite → store
+actions → the Settings UI and its confirmations → docs.
 
 **Versioning rule.** `SCHEMA_VERSION` in `src/data/db.ts` is the on-disk contract. Every schema
 change bumps the Dexie version with an `upgrade()` hook, and the snapshot carries the version so

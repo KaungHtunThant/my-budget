@@ -313,16 +313,16 @@ or changes data.
 | 14.2 | Reach currencies and rates, with a badge counting missing rates | Built |
 | 14.3 | Change the budget cycle, with a live preview of the resulting dates | Built |
 | 14.4 | Theme: follow system, light, or dark | Built |
-| 14.5 | Reload sample data | Built (prototype-only) |
-| 14.6 | Start empty and run first-time setup again, behind a confirmation | Built (prototype-only) |
+| 14.5 | Reload sample data | Built — **to be removed in D3** |
+| 14.6 | Start empty and run first-time setup again, behind a confirmation | Built — confirmation to be hardened in D3 |
 | 14.7 | App lock with fingerprint or PIN | Stub |
-| 14.8 | Export all data to a file | Planned |
-| 14.9 | Import from a file, choosing merge or replace | Planned |
+| 14.8 | Export all data to a file | Next (D3) |
+| 14.9 | Import from a file, merging or replacing, with conflicts surfaced first | Next (D3) |
 | 14.10 | Google Drive backup and restore | Planned |
 
-**14.5 and 14.6 exist because there is no database.** Once data is real, "start empty" becomes a
-destructive action needing a stronger confirmation, and "reload sample data" arguably should not
-ship at all. Decide their fate rather than inheriting them.
+**14.5 and 14.6 existed because there was no database.** Decided 2026-08-20: 14.5 is removed —
+loading fake data over real data has no purpose worth the risk — and 14.6 stays as a genuinely
+destructive action behind a stronger confirmation, sitting beside export and import.
 
 ---
 
@@ -370,8 +370,8 @@ because it is expensive to retrofit. Listed so it is visible when scoping the da
 | ID | Function point | Status |
 |---|---|---|
 | 17.1 | Data survives closing the app | **Built** |
-| 17.2 | Export to a single portable file, and import it back | Partly built — the file and its payload exist; the share/import UI does not |
-| 17.3 | Optional passphrase encryption on the export | Planned |
+| 17.2 | Export to a single portable file, and import it back | Next (D3) — the file and its payload exist; the share/import UI does not |
+| 17.3 | Optional passphrase encryption on the export | Planned — deliberately deferred out of D3 |
 | 17.4 | Google Drive backup, manual and optionally periodic | Planned |
 | 17.5 | App lock with fingerprint or PIN at launch | Planned |
 | 17.6 | Automatic generation of recurring transactions on their due date | Planned |
