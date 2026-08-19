@@ -22,71 +22,30 @@ import EmptyState from '@/components/EmptyState/EmptyState.vue'
 import MoneyText from '@/components/MoneyText/MoneyText.vue'
 import PeriodSwitcher from '@/components/PeriodSwitcher/PeriodSwitcher.vue'
 import ProgressMeter from '@/components/ProgressMeter/ProgressMeter.vue'
+import { useBudgetContext } from '@/composables/useBudgetContext'
 import { formatMoney, formatMoneyCompact } from '@/domain/format'
-import { subtract, toFloat } from '@/domain/money'
+import { todayIso } from '@/domain/period'
 import { useBudgetStore } from '@/stores/budget'
 
+import { reportsView } from './utils'
+
 const store = useBudgetStore()
+const { ctx, period } = useBudgetContext()
 
-/** Donut segments for the category breakdown. */
-const donut = computed(() => {
-  const rows = store.breakdown.rows
-  const total = store.breakdown.total.minor
-  if (total === 0) return []
-
-  const radius = 52
-  const circumference = 2 * Math.PI * radius
-  let offset = 0
-
-  return rows.slice(0, 8).map((row) => {
-    const fraction = row.amount.minor / total
-    const length = fraction * circumference
-    const segment = {
-      color: `var(--ion-color-${row.category.color})`,
-      dash: `${length} ${circumference - length}`,
-      offset: -offset,
-      name: row.category.name,
-    }
-    offset += length
-    return segment
-  })
-})
-
-const trendMax = computed(() =>
-  Math.max(1, ...store.trend.flatMap((t) => [toFloat(t.income), toFloat(t.expense)])),
+// The argument literal is built inside the computed on purpose: hoisting it would freeze the
+// primitives, so the screen would stop following the period switcher while its arrays kept
+// updating.
+const view = computed(() =>
+  reportsView({
+    transactions: store.transactions,
+    categories: store.categories,
+    base: store.base,
+    ctx: ctx.value,
+    period: period.value,
+    periodConfig: store.periodConfig,
+    today: todayIso(),
+  }),
 )
-
-const trendRows = computed(() =>
-  store.trend.map((t) => ({
-    label: t.period.label,
-    short: t.period.label.split(' ')[0].slice(0, 3),
-    income: t.income,
-    expense: t.expense,
-    net: t.net,
-    incomeWidth: `${(toFloat(t.income) / trendMax.value) * 100}%`,
-    expenseWidth: `${(toFloat(t.expense) / trendMax.value) * 100}%`,
-  })),
-)
-
-/** Averages over the periods that actually have activity, so a fresh install isn't skewed. */
-const averages = computed(() => {
-  const active = store.trend.filter((t) => t.income.minor !== 0 || t.expense.minor !== 0)
-  const count = Math.max(1, active.length)
-  const income = active.reduce((a, t) => a + t.income.minor, 0)
-  const expense = active.reduce((a, t) => a + t.expense.minor, 0)
-  return {
-    income: { minor: Math.round(income / count), currency: store.base },
-    expense: { minor: Math.round(expense / count), currency: store.base },
-    saved: { minor: Math.round((income - expense) / count), currency: store.base },
-    periods: active.length,
-  }
-})
-
-const savingsRate = computed(() => {
-  const { income, expense } = store.currentSummary
-  if (income.minor <= 0) return null
-  return (subtract(income, expense).minor / income.minor) * 100
-})
 </script>
 
 <template>
@@ -102,7 +61,7 @@ const savingsRate = computed(() => {
 
     <IonContent class="app-content">
       <div class="app-card">
-        <PeriodSwitcher :period="store.period" />
+        <PeriodSwitcher :period="period" />
       </div>
 
       <EmptyState
@@ -118,26 +77,28 @@ const savingsRate = computed(() => {
           <div class="overview">
             <div>
               <span class="app-muted">Income</span>
-              <MoneyText :value="store.currentSummary.income" class="app-figure--large" />
+              <MoneyText :value="view.summary.income" class="app-figure--large" />
             </div>
             <div>
               <span class="app-muted">Spent</span>
-              <MoneyText :value="store.currentSummary.expense" class="app-figure--large" />
+              <MoneyText :value="view.summary.expense" class="app-figure--large" />
             </div>
             <div>
               <span class="app-muted">Net</span>
-              <MoneyText :value="store.currentSummary.net" colored class="app-figure--large" />
+              <MoneyText :value="view.summary.net" colored class="app-figure--large" />
             </div>
           </div>
-          <div v-if="savingsRate !== null" class="rate">
+          <div v-if="view.savingsRate !== null" class="rate">
             <div class="app-row-split">
               <span class="app-muted">Savings rate this cycle</span>
-              <strong class="app-figure">{{ Math.round(savingsRate) }}%</strong>
+              <strong class="app-figure">{{ Math.round(view.savingsRate) }}%</strong>
             </div>
             <ProgressMeter
-              :percent="Math.max(0, savingsRate)"
-              :color="savingsRate >= 20 ? 'success' : savingsRate >= 0 ? 'warning' : 'danger'"
-              :over="savingsRate < 0"
+              :percent="Math.max(0, view.savingsRate)"
+              :color="
+                view.savingsRate >= 20 ? 'success' : view.savingsRate >= 0 ? 'warning' : 'danger'
+              "
+              :over="view.savingsRate < 0"
             />
           </div>
         </div>
@@ -145,11 +106,11 @@ const savingsRate = computed(() => {
         <!-- Category breakdown -->
         <div class="app-section-title">Where it went</div>
         <div class="app-card">
-          <div v-if="donut.length" class="donut-wrap">
+          <div v-if="view.donut.length" class="donut-wrap">
             <svg viewBox="0 0 120 120" class="donut" role="img" aria-label="Spending by category">
               <circle cx="60" cy="60" r="52" class="donut__track" />
               <circle
-                v-for="segment in donut"
+                v-for="segment in view.donut"
                 :key="segment.name"
                 cx="60"
                 cy="60"
@@ -162,19 +123,19 @@ const savingsRate = computed(() => {
             </svg>
             <div class="donut__center">
               <span class="app-muted">Total</span>
-              <strong>{{ formatMoneyCompact(store.breakdown.total) }}</strong>
+              <strong>{{ formatMoneyCompact(view.breakdown.total) }}</strong>
             </div>
           </div>
 
-          <div v-if="store.breakdown.missing.length" class="warn">
+          <div v-if="view.breakdown.missing.length" class="warn">
             <IonIcon :icon="alertCircleOutline" />
             <span>
-              Spending in {{ store.breakdown.missing.join(', ') }} is excluded — no rate set.
+              Spending in {{ view.breakdown.missing.join(', ') }} is excluded — no rate set.
             </span>
           </div>
 
           <div class="rows">
-            <div v-for="row in store.breakdown.rows" :key="row.category.id" class="row">
+            <div v-for="row in view.breakdown.rows" :key="row.category.id" class="row">
               <div class="row__head">
                 <span class="row__name">
                   <i class="swatch" :style="{ background: `var(--ion-color-${row.category.color})` }" />
@@ -191,15 +152,15 @@ const savingsRate = computed(() => {
             </div>
           </div>
 
-          <IonNote v-if="store.breakdown.rows.length === 0" class="empty-note">
-            No spending recorded in {{ store.period.label }}.
+          <IonNote v-if="view.breakdown.rows.length === 0" class="empty-note">
+            No spending recorded in {{ period.label }}.
           </IonNote>
         </div>
 
         <!-- Trend -->
         <div class="app-section-title">Last 6 cycles</div>
         <div class="app-card">
-          <div v-for="row in trendRows" :key="row.label" class="trend-row">
+          <div v-for="row in view.rows" :key="row.label" class="trend-row">
             <div class="trend-row__head">
               <span>{{ row.label }}</span>
               <MoneyText :value="row.net" colored signed />
@@ -223,19 +184,20 @@ const savingsRate = computed(() => {
           <div class="overview">
             <div>
               <span class="app-muted">Income</span>
-              <MoneyText :value="averages.income" />
+              <MoneyText :value="view.averages.income" />
             </div>
             <div>
               <span class="app-muted">Spent</span>
-              <MoneyText :value="averages.expense" />
+              <MoneyText :value="view.averages.expense" />
             </div>
             <div>
               <span class="app-muted">Saved</span>
-              <MoneyText :value="averages.saved" colored />
+              <MoneyText :value="view.averages.saved" colored />
             </div>
           </div>
           <IonNote class="avg-note">
-            Across {{ averages.periods }} {{ averages.periods === 1 ? 'cycle' : 'cycles' }} with
+            Across {{ view.averages.periods }}
+            {{ view.averages.periods === 1 ? 'cycle' : 'cycles' }} with
             activity.
           </IonNote>
         </div>
