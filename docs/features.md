@@ -340,6 +340,8 @@ destructive action behind a stronger confirmation, sitting beside export and imp
 | 15.6 | Compact amounts (1.2k, 3.4M) where space is tight | Built |
 | 15.7 | Dark mode, following the system or forced | Built |
 | 15.8 | App icon and splash screen; installable debug APK | Built |
+| 15.9 | Swipe left or right on a tab to move to the next one, with the view sliding in from the side swiped from; no wrap at either end | Built |
+| 15.10 | Dock indicator that tracks the swipe under the finger, springing back if the swipe is abandoned | Built |
 
 ---
 

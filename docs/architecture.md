@@ -85,7 +85,10 @@ keystroke while the transaction list does not.
 - **A view gets a `utils.ts` when it has a rule you can get wrong** — a sign convention, a
   threshold, a multi-predicate filter, a grouping, a payload shape, a completeness check.
   Constants and one-expression computeds do not earn a file. `SettingsPage`, `OnboardingPage`,
-  `MorePage`, `TabsPage`, `EmptyState` and `PeriodSwitcher` have none, and that is correct.
+  `MorePage`, `EmptyState` and `PeriodSwitcher` have none, and that is correct. `TabsPage` gained
+  one when it gained the swipe gesture: the tab order, the no-wrap neighbour rule, the edge damping
+  and the commit thresholds are all rules you can get wrong — and the pure part is the only part of
+  a gesture jsdom can test.
 - **`services/<x>.ts`** is named after the `domain/<x>.ts` it extends or the entity whose records
   it builds. Nothing else may be a service filename.
 - **`useBudgetStore()` may appear only in `*.vue`, `src/router/index.ts`, and

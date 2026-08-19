@@ -31,6 +31,14 @@ All notable changes to this project are recorded here. The format follows
   amount in the *base* currency and hand that straight to a wallet transaction, and the monthly
   commitment total summed rule amounts as if they shared a currency — it now converts through the
   settings rates and says which currency it had to leave out.
+- **Swipe left or right to change tab.** A horizontal drag on a tab page moves to the next one, with
+  the incoming view sliding in from the side swiped from; the dock's new indicator tracks the finger
+  and springs back if the swipe is abandoned. No wrap at either end — the ends resist instead. A
+  gesture this wide has to know when it is not wanted, so it declines on a presented overlay, on
+  anything that owns the pointer itself (sliding rows, FABs, pickers, the refresher) and on any
+  horizontally scrollable ancestor, which is what keeps the filter chip strips scrolling. The page
+  does *not* follow the finger: tab pages are lazy routes, so the incoming view does not exist to
+  drag until the navigation resolves.
 
 ### Changed
 
