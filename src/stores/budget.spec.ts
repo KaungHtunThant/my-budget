@@ -659,7 +659,9 @@ describe('writes', () => {
 
     await store.contributeToGoal('gol_laptop', 'wal_bank', { minor: 15000, currency: 'USD' })
 
-    const created = store.transactions.find((t) => t.note === 'New laptop' && t.date === '2026-08-20')
+    const created = store.transactions.find(
+      (t) => t.note === 'New laptop' && t.date === '2026-08-20',
+    )
     expect({
       added: store.transactions.length - before,
       type: created?.type,

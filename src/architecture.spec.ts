@@ -65,7 +65,10 @@ function offendingImports(path: string, forbidden: readonly string[]): string[] 
 }
 
 /** Reported as `{ file: [bad, imports] }` so a failure names the file and the cause at once. */
-function violations(paths: readonly string[], forbidden: readonly string[]): Record<string, string[]> {
+function violations(
+  paths: readonly string[],
+  forbidden: readonly string[],
+): Record<string, string[]> {
   const out: Record<string, string[]> = {}
   for (const path of paths) {
     const bad = offendingImports(path, forbidden)
@@ -86,7 +89,16 @@ describe('domain is self-contained', () => {
 })
 
 describe('services are pure', () => {
-  const FORBIDDEN = ['vue', 'pinia', '@ionic', 'ionicons', '@/stores', '@/views', '@/components', '@/data']
+  const FORBIDDEN = [
+    'vue',
+    'pinia',
+    '@ionic',
+    'ionicons',
+    '@/stores',
+    '@/views',
+    '@/components',
+    '@/data',
+  ]
 
   it('import no framework, store, screen or storage module', () => {
     expect(violations(sourcesIn('services'), FORBIDDEN)).toEqual({})
@@ -136,9 +148,8 @@ describe('screen utils are pure', () => {
 
 describe('the store stays below the UI', () => {
   it('imports no view, component, router or Ionic module', () => {
-    expect(violations(sourcesIn('stores'), ['@/views', '@/components', 'vue-router', '@ionic'])).toEqual(
-      {},
-    )
+    const forbidden = ['@/views', '@/components', 'vue-router', '@ionic']
+    expect(violations(sourcesIn('stores'), forbidden)).toEqual({})
   })
 
   // TODO(phase 6): once the rollups have moved out, assert the store does not import
@@ -162,7 +173,10 @@ describe('store access is confined', () => {
     // Specs are exempt: naming the store in a test is not a production dependency on it.
     const leaks = ALL.filter(
       (f) =>
-        f.endsWith('.ts') && !isSpec(f) && !ALLOWED.includes(f) && /\buseBudgetStore\b/.test(read(f)),
+        f.endsWith('.ts') &&
+        !isSpec(f) &&
+        !ALLOWED.includes(f) &&
+        /\buseBudgetStore\b/.test(read(f)),
     )
     expect(leaks).toEqual([])
   })
