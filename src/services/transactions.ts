@@ -10,7 +10,7 @@
  */
 
 import type { CurrencyCode } from '@/domain/currency'
-import { convert } from '@/domain/fx'
+import { convert, impliedRate } from '@/domain/fx'
 import { type Money, parseMoney } from '@/domain/money'
 import type {
   Id,
@@ -181,18 +181,18 @@ export function buildTransaction(
  *
  * An entry that stored an `fx` snapshot carries its rate verbatim — that is the whole point of
  * freezing it. A cross-currency transfer stores no snapshot, so the rate has to be recovered
- * from the two amounts.
+ * from the two amounts, which is what `domain/fx.impliedRate` is for: it divides out each
+ * currency's decimal places before dividing the amounts.
  *
- * TODO(phase 7): the recovery below is wrong whenever the two currencies have different decimal
- * counts, because it divides minor units without rescaling — a USD→JPY transfer comes back 100×
- * off, and re-saving then corrupts the amount. `domain/fx.impliedRate` already does this
- * correctly. It is reproduced verbatim here so that wiring the modal to this service is provably
- * behaviour-preserving, and the fix lands as its own commit.
+ * Doing that division on raw minor units instead — as this did until it was fixed — is wrong
+ * whenever the two currencies have different precisions. A 100.00 USD to 15,000 JPY transfer came
+ * back as 1.5 rather than 150, and because this value populates the rate field when editing,
+ * saving that form again wrote an amount 100x off.
  */
 export function rateTextFor(tx: Transaction): string {
   if (tx.fx) return String(tx.fx.rate)
   if (tx.type === 'transfer' && tx.toAmount && tx.toAmount.currency !== tx.amount.currency) {
-    return String(tx.toAmount.minor / tx.amount.minor)
+    return String(impliedRate(tx.amount, tx.toAmount))
   }
   return ''
 }

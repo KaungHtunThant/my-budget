@@ -310,7 +310,8 @@ describe('rateTextFor', () => {
   })
 
   it('recovers the rate for a cross-currency transfer at equal precision', () => {
-    // USD and EUR both have 2 decimals, so the naive division happens to be right here.
+    // USD and EUR both have 2 decimals, so the old raw-minor-unit division agreed here. Kept as
+    // a regression test that the fix did not disturb the same-precision case.
     const t = tx({
       type: 'transfer',
       toWalletId: 'eur',
@@ -320,16 +321,40 @@ describe('rateTextFor', () => {
     expect(Number(rateTextFor(t))).toBe(impliedRate(t.amount, t.toAmount!))
   })
 
-  it('is WRONG across differing precisions — documented until phase 7 fixes it', () => {
+  it('recovers the rate across differing precisions', () => {
     // 100.00 USD -> 15,000 JPY is a rate of 150. Dividing minor units without rescaling for
-    // JPY's zero decimals gives 1.5, out by 100x. Because this value is loaded into the rate
-    // field when editing, re-saving such a transfer corrupts the stored amount.
+    // JPY's zero decimals gave 1.5 — out by 100x — and because this value populates the rate
+    // field when editing, saving that form again wrote a corrupted amount.
     const t = tx({
       type: 'transfer',
       toWalletId: 'jpy',
       toAmount: { minor: 15000, currency: 'JPY' },
     })
-    expect(impliedRate(t.amount, t.toAmount!)).toBe(150)
-    expect(rateTextFor(t)).toBe('1.5')
+    expect(rateTextFor(t)).toBe('150')
+    expect(Number(rateTextFor(t))).toBe(impliedRate(t.amount, t.toAmount!))
+  })
+
+  it('round-trips a cross-decimal transfer through edit without changing the amounts', () => {
+    // The bug's real cost: reopening a saved USD<->JPY transfer and saving it again used to
+    // rewrite toAmount 100x off. This asserts the recovered rate reproduces the stored amounts.
+    const stored = tx({
+      type: 'transfer',
+      walletId: 'usd',
+      toWalletId: 'jpy',
+      amount: { minor: 10000, currency: 'USD' },
+      toAmount: { minor: 15000, currency: 'JPY' },
+    })
+
+    const reopened = draft({
+      type: 'transfer',
+      walletId: 'usd',
+      toWalletId: 'jpy',
+      amountText: '100',
+      rateText: rateTextFor(stored),
+    })
+
+    const resaved = buildTransaction(reopened, WALLETS)
+    expect(resaved!.amount).toEqual(stored.amount)
+    expect(resaved!.toAmount).toEqual(stored.toAmount)
   })
 })
