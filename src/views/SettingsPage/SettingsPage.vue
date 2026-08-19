@@ -52,6 +52,8 @@ import {
   todayIso,
 } from '@/domain/period'
 import type { ThemePreference } from '@/domain/types'
+import { periodConfigFrom } from '@/services/period'
+import { withBaseCurrency } from '@/services/settings'
 import { useBudgetStore } from '@/stores/budget'
 
 const store = useBudgetStore()
@@ -69,18 +71,14 @@ const startWeekday = ref(store.periodConfig.startWeekday ?? 1)
 
 const baseDef = computed(() => currency(store.base))
 
-const draftPeriodConfig = computed(() => {
-  switch (periodType.value) {
-    case 'anchored-month':
-      return { type: 'anchored-month' as const, anchorDay: anchorDay.value }
-    case 'weekly':
-      return { type: 'weekly' as const, startWeekday: startWeekday.value }
-    case 'fortnightly':
-      return { type: 'fortnightly' as const, anchorDate: todayIso() }
-    case 'calendar-month':
-      return { type: 'calendar-month' as const }
-  }
-})
+const draftPeriodConfig = computed(() =>
+  periodConfigFrom({
+    type: periodType.value,
+    anchorDay: anchorDay.value,
+    startWeekday: startWeekday.value,
+    today: todayIso(),
+  }),
+)
 
 const draftPreview = computed(() => periodFor(todayIso(), draftPeriodConfig.value))
 
@@ -110,12 +108,7 @@ function requestCurrencyChange(code: CurrencyCode): void {
 
 async function confirmCurrencyChange(): Promise<void> {
   if (!pendingCurrency.value) return
-  await store.saveSettings({
-    baseCurrency: pendingCurrency.value,
-    activeCurrencies: Array.from(
-      new Set([pendingCurrency.value, ...store.settings.activeCurrencies]),
-    ),
-  })
+  await store.saveSettings(withBaseCurrency(store.settings, pendingCurrency.value))
   pendingCurrency.value = null
 }
 

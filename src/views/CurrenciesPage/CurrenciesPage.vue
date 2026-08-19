@@ -28,10 +28,18 @@ import {
 import { addOutline, alertCircleOutline } from 'ionicons/icons'
 import CurrencyPicker from '@/components/CurrencyPicker/CurrencyPicker.vue'
 import { type CurrencyCode, currency } from '@/domain/currency'
-import { formatMoney, formatRate } from '@/domain/format'
-import { fromMajor } from '@/domain/money'
-import { convert, isValidRate } from '@/domain/fx'
+import { formatRate } from '@/domain/format'
+import { parseRate } from '@/services/fx'
+import { withActiveCurrency, withoutCurrency } from '@/services/settings'
 import { useBudgetStore } from '@/stores/budget'
+
+import {
+  canRemoveCurrency,
+  currenciesInUse,
+  otherCurrencies,
+  ratePreview,
+  rateDrafts,
+} from './utils'
 
 const store = useBudgetStore()
 
@@ -39,54 +47,36 @@ const pickerOpen = ref(false)
 /** Local text state per currency so a half-typed rate is not written to settings. */
 const drafts = ref<Record<string, string>>({})
 
-const others = computed(() =>
-  store.settings.activeCurrencies.filter((c) => c !== store.base),
-)
+const others = computed(() => otherCurrencies(store.settings))
 
 /** Currencies held in a wallet — these are the ones that actually need a rate. */
-const inUse = computed(() => new Set(store.wallets.map((w) => w.currency)))
+const inUse = computed(() => currenciesInUse(store.wallets))
 
 function syncDrafts(): void {
-  const next: Record<string, string> = {}
-  for (const code of others.value) {
-    const rate = store.settings.rates[code]
-    next[code] = rate === undefined ? '' : String(rate)
-  }
-  drafts.value = next
+  drafts.value = rateDrafts(others.value, store.settings.rates)
 }
 
 watch([others, () => store.settings.rates], syncDrafts, { immediate: true, deep: true })
 
 async function commit(code: CurrencyCode): Promise<void> {
-  const raw = drafts.value[code]?.replace(',', '.') ?? ''
-  const value = Number(raw)
-  if (!raw.trim() || !isValidRate(value)) return
-  await store.setRate(code, value)
+  const rate = parseRate(drafts.value[code] ?? '')
+  if (rate === null) return
+  await store.setRate(code, rate)
 }
 
 function preview(code: CurrencyCode): string | null {
-  const value = Number(drafts.value[code]?.replace(',', '.') ?? '')
-  if (!isValidRate(value)) return null
-  const sample = fromMajor(100, code)
-  return `${formatMoney(sample)} = ${formatMoney(convert(sample, store.base, value))}`
+  return ratePreview(code, store.base, drafts.value[code] ?? '')
 }
 
 async function addCurrency(code: CurrencyCode): Promise<void> {
   pickerOpen.value = false
-  if (store.settings.activeCurrencies.includes(code)) return
-  await store.saveSettings({
-    activeCurrencies: [...store.settings.activeCurrencies, code],
-  })
+  const patch = withActiveCurrency(store.settings, code)
+  if (patch) await store.saveSettings(patch)
 }
 
 async function removeCurrency(code: CurrencyCode): Promise<void> {
-  if (inUse.value.has(code)) return
-  const rates = { ...store.settings.rates }
-  delete rates[code]
-  await store.saveSettings({
-    activeCurrencies: store.settings.activeCurrencies.filter((c) => c !== code),
-    rates,
-  })
+  if (!canRemoveCurrency(code, inUse.value)) return
+  await store.saveSettings(withoutCurrency(store.settings, code))
 }
 </script>
 

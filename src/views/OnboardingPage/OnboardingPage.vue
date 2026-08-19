@@ -45,6 +45,7 @@ import {
   periodFor,
   todayIso,
 } from '@/domain/period'
+import { periodConfigFrom } from '@/services/period'
 import { useBudgetStore } from '@/stores/budget'
 
 const store = useBudgetStore()
@@ -61,18 +62,14 @@ const saving = ref(false)
 
 const currencyDef = computed(() => currency(baseCurrency.value))
 
-const periodConfig = computed<BudgetPeriodConfig>(() => {
-  switch (periodType.value) {
-    case 'anchored-month':
-      return { type: 'anchored-month', anchorDay: anchorDay.value }
-    case 'weekly':
-      return { type: 'weekly', startWeekday: startWeekday.value }
-    case 'fortnightly':
-      return { type: 'fortnightly', anchorDate: todayIso() }
-    case 'calendar-month':
-      return { type: 'calendar-month' }
-  }
-})
+const periodConfig = computed<BudgetPeriodConfig>(() =>
+  periodConfigFrom({
+    type: periodType.value,
+    anchorDay: anchorDay.value,
+    startWeekday: startWeekday.value,
+    today: todayIso(),
+  }),
+)
 
 /** Show the user the actual dates their choice produces, not just its name. */
 const periodPreview = computed(() => periodFor(todayIso(), periodConfig.value))
