@@ -129,7 +129,7 @@ function openEdit(tx: Transaction): void {
 
     <IonContent class="app-content">
       <div class="app-card">
-        <PeriodSwitcher v-if="periodOnly" />
+        <PeriodSwitcher v-if="periodOnly" :period="store.period" />
         <div v-else class="all-time app-muted">Showing all transactions</div>
       </div>
 

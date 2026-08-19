@@ -117,7 +117,7 @@ async function remove(): Promise<void> {
 
     <IonContent class="app-content">
       <div class="app-card">
-        <PeriodSwitcher />
+        <PeriodSwitcher :period="store.period" />
         <IonNote class="cycle-note">{{ describePeriodConfig(store.periodConfig) }}</IonNote>
       </div>
 

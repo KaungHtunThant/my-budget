@@ -146,7 +146,7 @@ async function refresh(event: CustomEvent): Promise<void> {
 
         <!-- This cycle -->
         <div class="app-card">
-          <PeriodSwitcher />
+          <PeriodSwitcher :period="store.period" />
           <div class="cycle-figures">
             <div class="cycle-figure">
               <span class="app-muted"><IonIcon :icon="trendingUpOutline" /> Income</span>

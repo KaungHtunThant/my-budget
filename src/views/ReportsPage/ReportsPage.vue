@@ -102,7 +102,7 @@ const savingsRate = computed(() => {
 
     <IonContent class="app-content">
       <div class="app-card">
-        <PeriodSwitcher />
+        <PeriodSwitcher :period="store.period" />
       </div>
 
       <EmptyState

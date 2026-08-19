@@ -3,10 +3,17 @@
  * Steps through budget periods. The label comes from `Period.label`, so it automatically
  * reads "August 2026" for a calendar month and "25 Jul – 24 Aug" for a payday-anchored
  * cycle — the user's chosen period shape is visible rather than implied.
+ *
+ * The period arrives as a prop because it is derived, not stored: the store keeps only the raw
+ * offset, and a service turns that plus the cycle config into a range. The offset itself, and
+ * the three actions that move it, remain plain store state.
  */
 import { IonButton, IonIcon } from '@ionic/vue'
 import { chevronBack, chevronForward } from 'ionicons/icons'
+import type { Period } from '@/domain/period'
 import { useBudgetStore } from '@/stores/budget'
+
+defineProps<{ period: Period }>()
 
 const store = useBudgetStore()
 </script>
@@ -18,7 +25,7 @@ const store = useBudgetStore()
     </IonButton>
 
     <button class="switcher__label" type="button" @click="store.goToCurrentPeriod()">
-      <span>{{ store.period.label }}</span>
+      <span>{{ period.label }}</span>
       <small v-if="!store.isCurrentPeriod" class="app-muted">Tap for current</small>
     </button>
 
