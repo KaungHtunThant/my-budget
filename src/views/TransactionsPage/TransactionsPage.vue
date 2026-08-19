@@ -28,13 +28,15 @@ import MoneyText from '@/components/MoneyText/MoneyText.vue'
 import PeriodSwitcher from '@/components/PeriodSwitcher/PeriodSwitcher.vue'
 import TransactionModal from '@/components/TransactionModal/TransactionModal.vue'
 import TransactionRow from '@/components/TransactionRow/TransactionRow.vue'
+import { useBudgetContext } from '@/composables/useBudgetContext'
 import { formatDate } from '@/domain/format'
-import { negate, sum, zero } from '@/domain/money'
-import { toBase } from '@/domain/budgeting'
 import type { Id, Transaction, TransactionType } from '@/domain/types'
 import { useBudgetStore } from '@/stores/budget'
 
+import { activeFilterCount as countFilters, applyFilters, dayGroups } from './utils'
+
 const store = useBudgetStore()
+const { ctx, period } = useBudgetContext()
 
 const modalOpen = ref(false)
 const editing = ref<Transaction | null>(null)
@@ -46,52 +48,22 @@ const categoryFilter = ref<Id | 'all'>('all')
 /** When false the list shows every transaction rather than only the selected cycle. */
 const periodOnly = ref(true)
 
-const filtered = computed(() => {
-  const term = search.value.trim().toLowerCase()
-  const source = periodOnly.value ? store.periodTransactions : store.transactions
-  return source.filter((t) => {
-    if (typeFilter.value !== 'all' && t.type !== typeFilter.value) return false
-    if (walletFilter.value !== 'all' && t.walletId !== walletFilter.value && t.toWalletId !== walletFilter.value) {
-      return false
-    }
-    if (categoryFilter.value !== 'all' && t.categoryId !== categoryFilter.value) return false
-    if (term) {
-      const category = t.categoryId ? store.categoriesById.get(t.categoryId)?.name ?? '' : ''
-      if (!`${t.note} ${category}`.toLowerCase().includes(term)) return false
-    }
-    return true
-  })
-})
+const filters = computed(() => ({
+  search: search.value,
+  type: typeFilter.value,
+  walletId: walletFilter.value,
+  categoryId: categoryFilter.value,
+  periodOnly: periodOnly.value,
+}))
+
+const filtered = computed(() =>
+  applyFilters(store.transactions, period.value, filters.value, store.categoriesById),
+)
 
 /** Grouped by date so the list reads as a diary rather than an undifferentiated feed. */
-const grouped = computed(() => {
-  const groups = new Map<string, Transaction[]>()
-  for (const tx of filtered.value) {
-    const bucket = groups.get(tx.date) ?? []
-    bucket.push(tx)
-    groups.set(tx.date, bucket)
-  }
-  return [...groups.entries()].map(([date, items]) => ({
-    date,
-    items,
-    net: sum(
-      items.map((t) => {
-        const converted = toBase(t.amount, store.ctx)
-        if (!converted || t.type === 'transfer') return zero(store.base)
-        return t.type === 'expense' ? negate(converted) : converted
-      }),
-      store.base,
-    ),
-  }))
-})
+const grouped = computed(() => dayGroups(filtered.value, ctx.value))
 
-const activeFilterCount = computed(
-  () =>
-    (typeFilter.value !== 'all' ? 1 : 0) +
-    (walletFilter.value !== 'all' ? 1 : 0) +
-    (categoryFilter.value !== 'all' ? 1 : 0) +
-    (periodOnly.value ? 0 : 1),
-)
+const activeFilterCount = computed(() => countFilters(filters.value))
 
 function clearFilters(): void {
   typeFilter.value = 'all'
@@ -129,7 +101,7 @@ function openEdit(tx: Transaction): void {
 
     <IonContent class="app-content">
       <div class="app-card">
-        <PeriodSwitcher v-if="periodOnly" :period="store.period" />
+        <PeriodSwitcher v-if="periodOnly" :period="period" />
         <div v-else class="all-time app-muted">Showing all transactions</div>
       </div>
 
