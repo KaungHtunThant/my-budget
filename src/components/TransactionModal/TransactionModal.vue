@@ -181,22 +181,18 @@ function pickCurrency(code: CurrencyCode): void {
 }
 
 async function save(): Promise<void> {
-  // Guard order mirrors the previous implementation exactly, including the consequence that a
-  // non-transfer missing its rate reports the amount message rather than the rate one — its
-  // resolved amount is null, so it fails this check first. Preserved so this commit is a no-op;
-  // see the note in the commit message.
-  const state = resolved.value
-  if (!state || state.amount === null || walletId.value === null) {
-    error.value = 'Enter an amount and choose a wallet.'
-    return
-  }
+  // The rate check comes first: a missing rate is the more specific complaint, and asking for an
+  // amount that has already been entered sends the user looking in the wrong field.
   if (needsRate.value && !rateValid.value) {
     error.value = 'Enter the exchange rate you used.'
     return
   }
 
   const payload = buildTransaction(draft.value, store.wallets)
-  if (!payload) return
+  if (!payload) {
+    error.value = 'Enter an amount and choose a wallet.'
+    return
+  }
 
   saving.value = true
   try {
