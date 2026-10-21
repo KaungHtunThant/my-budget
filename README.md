@@ -8,20 +8,23 @@ Everything lives on the device. The app makes no network requests — even its i
 fonts are bundled — and the only planned online feature is an optional Google Drive backup,
 which comes after a local file backup.
 
-**Current status: Stage 2 — persistence done, local backup UI next.**
+**Current status: 2.0.0 — Stage 2 with local backup done; app lock and release hardening next.**
 
 | Milestone | State |
 |---|---|
 | Stage 1 prototype (every screen, real money/FX/period logic) | Done — v1.0.0 |
 | N0–N3: IndexedDB store of record, contract tests, cut-over, JSON snapshot backstop | Done |
 | Layering refactor: calculation moved out of the store and view scripts into `services/` and per-screen `utils.ts`, enforced by a spec | Done |
-| D3: local backup — export via the share sheet, import with conflict-aware merge or replace | **Next** |
-| D4: app lock, upgrade testing, on-device performance, signed release APK | Planned |
+| Per-cycle budgets with recurring copies, schema 2 and its migration | Done — v2.0.0 |
+| D3: local backup — export via the share sheet, versioned restore with conflict-aware merge or replace | Done — v2.0.0 |
+| D4: app lock, upgrade testing, on-device performance, signed release APK | **Next** |
 | D5: Google Drive backup | Planned |
 
 Since persistence landed: salary, payslips and payday allocation were removed (pay is ordinary
 income now), recurring bills and budget limits can be entered in any currency with the rate frozen
-on the record, and the tab pages can be changed by swiping left or right.
+on the record, and the tab pages can be changed by swiping left or right. In 2.0.0 each cycle got
+its own budget plan — recurring budgets copy themselves into each new cycle — and backup and
+restore arrived, versioned by the app version that wrote each file.
 
 See [`docs/PLAN.md`](docs/PLAN.md) for the plan, [`docs/features.md`](docs/features.md) for the
 live scope, and [`CHANGELOG.md`](CHANGELOG.md) for what changed.
@@ -80,11 +83,13 @@ src/
     format.ts     money and date formatting
     types.ts      entities + the Repository interface
   services/    rules two or more screens share, and every builder of a persisted record;
-               pure and synchronous (budgeting, fx, goals, money, period, recurring,
-               settings, transactions)
+               pure and synchronous (budgeting, budgets, fx, goals, money, period,
+               recurring, settings, transactions)
   data/        db.ts schema (SCHEMA_VERSION), indexeddb.ts (the store of record),
-               memory.ts (the test double), snapshot.ts (durability backstop + export
-               payload), fixtures, and the repository contract suite
+               memory.ts (the test double), snapshot.ts (durability backstop),
+               migrations.ts (schema-to-schema transforms), backup.ts (versioned
+               restore and merge), backupFile.ts (share / pre-import copy),
+               version.ts, fixtures, and the repository contract suite
   stores/      the Pinia store — loaded records, writes, load lifecycle, no calculation;
                repository.ts picks the concrete Repository
   composables/ useBudgetContext — the base currency, rates and period a screen needs
@@ -119,11 +124,7 @@ Four rules the code holds to:
 
 ## Not built yet
 
-- **Local backup export/import (D3, next).** The snapshot payload already exists
-  (`IndexedDbRepository.exportSnapshot()`); what is missing is export through the share sheet,
-  import from a file with a dry-run that surfaces conflicts before asking merge-or-replace, and
-  refusal of snapshots from a newer schema. "Reload sample data" is removed in the same step.
-- Optional passphrase encryption on the export — deliberately deferred out of D3
+- Optional passphrase encryption on the backup file — deliberately deferred out of D3
 - App lock with fingerprint or PIN (D4) — visible in Settings as a stub
 - Google Drive backup and restore (D5)
 - Automatic generation of recurring transactions on their due date — the rules and their

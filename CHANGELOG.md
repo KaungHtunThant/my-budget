@@ -6,6 +6,12 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-10-21
+
+Every cycle now has its own budget plan, with recurring budgets copied forward, and the app can
+export a backup and restore one. A major version because the budget model and the storage schema
+both change; existing data is migrated on first launch, with the last old-format snapshot kept.
+
 ### Changed
 
 - **BREAKING: every cycle has its own budget plan.** A budget used to be one limit per category
