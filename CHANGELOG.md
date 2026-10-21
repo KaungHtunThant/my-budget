@@ -6,6 +6,10 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-10-21
+
+Create a category from wherever you are choosing one.
+
 ### Added
 
 - **Create a category without leaving the form.** Every category picker — transactions, budgets
