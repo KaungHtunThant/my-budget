@@ -17,16 +17,20 @@ import {
   barChartOutline,
   cardOutline,
   cashOutline,
-  cloudUploadOutline,
+  informationCircleOutline,
   lockClosedOutline,
   pricetagsOutline,
   repeatOutline,
   settingsOutline,
+  shieldCheckmarkOutline,
 } from 'ionicons/icons'
 import { currenciesNeedingRates } from '@/services/fx'
 import { useBudgetStore } from '@/stores/budget'
 
 const store = useBudgetStore()
+
+/** From package.json, injected at build time — the same version every backup file records. */
+const appVersion = __APP_VERSION__
 
 const missingRates = computed(() => currenciesNeedingRates(store.wallets, store.settings))
 
@@ -74,28 +78,32 @@ const links = [
               <p>Fingerprint or PIN on launch — coming in a later build</p>
             </IonLabel>
           </IonItem>
-          <IonItem :disabled="true">
-            <IonIcon slot="start" :icon="cloudUploadOutline" />
+        </IonList>
+      </div>
+
+      <IonListHeader class="app-section-title">About</IonListHeader>
+      <div class="app-card app-card--flush">
+        <IonList lines="full">
+          <IonItem>
+            <IonIcon slot="start" :icon="informationCircleOutline" color="primary" />
             <IonLabel>
-              <h3>Backup &amp; restore</h3>
-              <p>Local export first, then Google Drive — arrives with the database</p>
+              <h3>My Budget</h3>
+              <p>Income, budgets, goals and currencies, on your own cycle</p>
+            </IonLabel>
+            <IonNote slot="end">Version {{ appVersion }}</IonNote>
+          </IonItem>
+          <IonItem>
+            <IonIcon slot="start" :icon="shieldCheckmarkOutline" color="primary" />
+            <IonLabel class="ion-text-wrap">
+              <h3>Your data stays on this phone</h3>
+              <p>
+                No account and no internet connection — nothing is ever sent anywhere. Export a
+                backup from Settings now and then, and keep the file somewhere safe.
+              </p>
             </IonLabel>
           </IonItem>
         </IonList>
       </div>
-
-      <p class="app-muted stage-note">
-        This is a design prototype. Data is held in memory only, so it resets when the app
-        reloads — persistence, backup and Drive sync come in the next stage.
-      </p>
     </IonContent>
   </IonPage>
 </template>
-
-<style scoped>
-.stage-note {
-  font-size: 0.8rem;
-  line-height: 1.5;
-  padding: 6px 6px 0;
-}
-</style>

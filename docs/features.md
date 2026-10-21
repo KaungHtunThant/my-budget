@@ -350,6 +350,7 @@ destructive action behind a stronger confirmation, sitting beside export and imp
 | 15.10 | Dock indicator that tracks the swipe under the finger, springing back if the swipe is abandoned | Built |
 | 15.11 | Android back button: closes the open sheet or dialog first, else returns a child page to the page it is listed on, else asks for a second press within two seconds to exit | Built |
 | 15.12 | A focused field is scrolled clear of the on-screen keyboard, with room below the last field of every form to scroll it into | Built |
+| 15.13 | About section on the More page showing the app version and that data never leaves the phone | Built |
 
 ---
 

@@ -332,8 +332,8 @@ async function addNow(rule: RecurringRule): Promise<void> {
         </div>
 
         <p class="app-muted note">
-          Swipe a row for quick actions. Automatic generation on the due date arrives with the
-          database stage — until then “Add now” records one immediately.
+          Swipe a row for quick actions. Rules don’t add transactions on their own yet — “Add
+          now” records one immediately.
         </p>
       </template>
 

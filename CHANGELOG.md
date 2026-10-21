@@ -6,6 +6,18 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **About section on the More page**, with the app's version — the same version every backup file
+  records — and a note that all data stays on the phone.
+
+### Removed
+
+- The prototype warnings: the More page's "design prototype, data held in memory" note, and
+  "Backup & restore" from its Planned list now that both are built. The Recurring screen's note no
+  longer promises generation "with the database stage"; it says plainly that rules do not add
+  transactions on their own yet.
+
 ## [2.1.0] — 2026-10-21
 
 Create a category from wherever you are choosing one.
