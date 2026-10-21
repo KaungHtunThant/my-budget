@@ -15,8 +15,8 @@ import { type CurrencyCode } from '@/domain/currency'
 import { fromMajor, type Money } from '@/domain/money'
 import { addDays, addMonths, DEFAULT_PERIOD_CONFIG, periodFor, todayIso } from '@/domain/period'
 import type {
-  Budget,
   Category,
+  DataSet,
   RecurringRule,
   SavingsGoal,
   Settings,
@@ -26,15 +26,8 @@ import type {
 
 import { type BudgetV1, budgetsToV2 } from './migrations'
 
-export interface SeedData {
-  settings: Settings
-  wallets: Wallet[]
-  categories: Category[]
-  transactions: Transaction[]
-  budgets: Budget[]
-  rules: RecurringRule[]
-  goals: SavingsGoal[]
-}
+/** A full data set, as the fixtures build it. Same shape as a backup's contents. */
+export type SeedData = DataSet
 
 export const DEFAULT_BASE_CURRENCY: CurrencyCode = 'USD'
 

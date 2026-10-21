@@ -3,13 +3,18 @@
  * Settings.
  *
  * Base currency and budget cycle live here as well as in onboarding, because both are
- * things people change once they have used the app for a while. Backup and app lock are
- * shown as disabled rows rather than hidden — they are planned, and the prototype should
- * be honest about where they will sit.
+ * things people change once they have used the app for a while. App lock is shown as a
+ * disabled row rather than hidden — it is planned, and the screen should be honest about
+ * where it will sit.
+ *
+ * Backup and restore: export goes out through the share sheet; import comes in through a
+ * plain file input, is checked and previewed before anything is written (`previewImport`),
+ * and then merges or replaces behind its own confirmation.
  */
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
+  type AlertButton,
   IonAlert,
   IonBackButton,
   IonButton,
@@ -32,15 +37,17 @@ import {
   IonTitle,
   IonToggle,
   IonToolbar,
+  toastController,
 } from '@ionic/vue'
 import {
   cashOutline,
+  cloudDownloadOutline,
   cloudUploadOutline,
   colorPaletteOutline,
   calendarNumberOutline,
   informationCircleOutline,
   lockClosedOutline,
-  refreshOutline,
+  trashOutline,
 } from 'ionicons/icons'
 import CurrencyPicker from '@/components/CurrencyPicker/CurrencyPicker.vue'
 import { type CurrencyCode, currency } from '@/domain/currency'
@@ -55,7 +62,8 @@ import type { ThemePreference } from '@/domain/types'
 import { periodConfigFrom } from '@/services/period'
 import { withBaseCurrency } from '@/services/settings'
 import { currenciesNeedingRates } from '@/services/fx'
-import { useBudgetStore } from '@/stores/budget'
+import { type ImportPreview, useBudgetStore } from '@/stores/budget'
+import { CLEAR_CONFIRMATION, confirmsClear, importSummary, needsWinnerChoice } from './utils'
 
 const store = useBudgetStore()
 
@@ -121,13 +129,108 @@ async function setTheme(value: ThemePreference): Promise<void> {
   await store.saveSettings({ theme: value })
 }
 
-async function resetWithDemo(): Promise<void> {
-  await store.resetApp(true)
+/** Typed confirmation: returning false keeps the alert open until the word is right. */
+function confirmResetEmpty(values: { confirm?: string }): boolean {
+  if (!confirmsClear(values.confirm)) return false
+  void resetEmpty()
+  return true
 }
 
 async function resetEmpty(): Promise<void> {
   await store.resetApp(false)
   await router.replace('/tabs/home')
+}
+
+// --- backup ----------------------------------------------------------------
+
+const appVersion = __APP_VERSION__
+const fileInput = ref<HTMLInputElement | null>(null)
+const busy = ref(false)
+/** The file being restored, once it has passed its checks. */
+const preview = ref<Extract<ImportPreview, { ok: true }> | null>(null)
+const previewOpen = ref(false)
+const winnerOpen = ref(false)
+const replaceOpen = ref(false)
+const importError = ref<string | null>(null)
+
+async function toast(message: string): Promise<void> {
+  const t = await toastController.create({ message, duration: 2500, position: 'bottom' })
+  await t.present()
+}
+
+async function exportBackup(): Promise<void> {
+  busy.value = true
+  try {
+    const outcome = await store.exportBackup()
+    if (outcome === 'downloaded') await toast('Backup downloaded.')
+  } catch {
+    await toast('The backup could not be exported.')
+  } finally {
+    busy.value = false
+  }
+}
+
+function chooseFile(): void {
+  if (fileInput.value) {
+    // Cleared first, or picking the same file twice in a row fires no change event.
+    fileInput.value.value = ''
+    fileInput.value.click()
+  }
+}
+
+async function onFileChosen(event: Event): Promise<void> {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  const result = await store.previewImport(await file.text())
+  if (!result.ok) {
+    importError.value = result.reason
+    return
+  }
+  preview.value = result
+  previewOpen.value = true
+}
+
+const previewMessage = computed(() =>
+  preview.value
+    ? importSummary({
+        appVersion: preview.value.appVersion,
+        converted: preview.value.converted,
+        exportedAt: preview.value.exportedAt,
+        total: preview.value.plan.total,
+      })
+    : '',
+)
+
+const previewButtons = computed<AlertButton[]>(() => [
+  { text: 'Cancel', role: 'cancel' },
+  {
+    text: 'Replace everything',
+    role: 'destructive',
+    handler: () => {
+      replaceOpen.value = true
+    },
+  },
+  {
+    text: 'Merge',
+    handler: () => {
+      if (preview.value && needsWinnerChoice(preview.value.plan.total)) winnerOpen.value = true
+      else void applyImport('merge')
+    },
+  },
+])
+
+async function applyImport(mode: 'merge' | 'replace', winner: 'incoming' | 'device' = 'incoming'): Promise<void> {
+  if (!preview.value) return
+  busy.value = true
+  try {
+    await store.importBackup(preview.value.data, mode, winner)
+    await toast(mode === 'replace' ? 'Backup restored.' : 'Backup merged.')
+  } catch {
+    await toast('The backup could not be restored. Nothing was changed.')
+  } finally {
+    busy.value = false
+    preview.value = null
+  }
 }
 </script>
 
@@ -204,28 +307,35 @@ async function resetEmpty(): Promise<void> {
               </IonLabel>
             </IonToggle>
           </IonItem>
-          <IonItem :disabled="true">
+          <IonItem button :detail="false" :disabled="busy" @click="exportBackup">
             <IonIcon slot="start" :icon="cloudUploadOutline" />
             <IonLabel>
-              <h3>Backup &amp; restore</h3>
-              <p>Export to a file, then Google Drive — arrives with the database</p>
+              <h3>Export backup</h3>
+              <p>Save everything to one file — keep it somewhere off this phone</p>
+            </IonLabel>
+          </IonItem>
+          <IonItem button :detail="false" :disabled="busy" @click="chooseFile">
+            <IonIcon slot="start" :icon="cloudDownloadOutline" />
+            <IonLabel>
+              <h3>Restore from backup</h3>
+              <p>Merge a backup file in, or replace everything with it</p>
             </IonLabel>
           </IonItem>
         </IonList>
+        <input
+          ref="fileInput"
+          type="file"
+          accept="application/json,.json"
+          hidden
+          @change="onFileChosen"
+        />
       </div>
 
-      <IonListHeader class="app-section-title">Prototype data</IonListHeader>
+      <IonListHeader class="app-section-title">Data</IonListHeader>
       <div class="app-card app-card--flush">
         <IonList lines="full">
-          <IonItem button :detail="false" @click="resetWithDemo">
-            <IonIcon slot="start" :icon="refreshOutline" color="primary" />
-            <IonLabel>
-              <h3>Reload sample data</h3>
-              <p>Regenerate demo wallets, budgets and history</p>
-            </IonLabel>
-          </IonItem>
           <IonItem button :detail="false" @click="resetAlertOpen = true">
-            <IonIcon slot="start" :icon="refreshOutline" color="danger" />
+            <IonIcon slot="start" :icon="trashOutline" color="danger" />
             <IonLabel color="danger">
               <h3>Start empty</h3>
               <p>Clear everything and run first-time setup again</p>
@@ -237,10 +347,10 @@ async function resetEmpty(): Promise<void> {
       <div class="app-card about">
         <IonIcon :icon="informationCircleOutline" color="primary" />
         <div>
-          <strong>Prototype build</strong>
+          <strong>My Budget {{ appVersion }}</strong>
           <p class="app-muted">
-            Screens and behaviour are complete, but data lives in memory only and resets on
-            reload. Persistence, local backup and Google Drive sync come in the next stage.
+            Everything stays on this phone. Export a backup now and then, and keep the file
+            somewhere else — it restores into this version or any later one.
           </p>
         </div>
       </div>
@@ -345,12 +455,50 @@ async function resetEmpty(): Promise<void> {
       <IonAlert
         :is-open="resetAlertOpen"
         header="Clear all data?"
-        message="Every wallet, transaction, budget and goal will be removed and first-time setup will run again."
+        :message="`Every wallet, transaction, budget and goal will be removed and first-time setup will run again. Export a backup first if you might want them back. Type ${CLEAR_CONFIRMATION} to confirm.`"
+        :inputs="[{ name: 'confirm', placeholder: CLEAR_CONFIRMATION, attributes: { autocapitalize: 'characters' } }]"
         :buttons="[
           { text: 'Cancel', role: 'cancel' },
-          { text: 'Clear', role: 'destructive', handler: resetEmpty },
+          { text: 'Clear everything', role: 'destructive', handler: confirmResetEmpty },
         ]"
         @did-dismiss="resetAlertOpen = false"
+      />
+
+      <!-- Restore: preview, then a conflict choice or a replace confirmation -->
+      <IonAlert
+        :is-open="previewOpen"
+        header="Restore this backup?"
+        :message="previewMessage"
+        :buttons="previewButtons"
+        @did-dismiss="previewOpen = false"
+      />
+      <IonAlert
+        :is-open="winnerOpen"
+        header="Some records differ"
+        message="The backup and this phone have different versions of some records. Which should be kept? Records only one side has are kept either way."
+        :buttons="[
+          { text: 'Cancel', role: 'cancel' },
+          { text: 'This phone’s', handler: () => applyImport('merge', 'device') },
+          { text: 'The backup’s', handler: () => applyImport('merge', 'incoming') },
+        ]"
+        @did-dismiss="winnerOpen = false"
+      />
+      <IonAlert
+        :is-open="replaceOpen"
+        header="Replace everything?"
+        message="Everything on this phone will be replaced by the backup. A copy of what is here now is kept on the phone first."
+        :buttons="[
+          { text: 'Cancel', role: 'cancel' },
+          { text: 'Replace', role: 'destructive', handler: () => applyImport('replace') },
+        ]"
+        @did-dismiss="replaceOpen = false"
+      />
+      <IonAlert
+        :is-open="importError !== null"
+        header="Can’t restore this file"
+        :message="importError ?? ''"
+        :buttons="['OK']"
+        @did-dismiss="importError = null"
       />
     </IonContent>
   </IonPage>

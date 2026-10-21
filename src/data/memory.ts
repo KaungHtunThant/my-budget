@@ -67,6 +67,22 @@ export class MemoryRepository implements Repository {
     )
   }
 
+  async exportData(): Promise<SeedData> {
+    return clone({
+      settings: this.settings,
+      wallets: this.wallets,
+      categories: this.categories,
+      transactions: this.transactions,
+      budgets: this.budgets,
+      rules: this.rules,
+      goals: this.goals,
+    })
+  }
+
+  async replaceAll(data: SeedData): Promise<void> {
+    this.load(data)
+  }
+
   private load(seed: SeedData): void {
     this.settings = clone(seed.settings)
     this.wallets = clone(seed.wallets)

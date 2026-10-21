@@ -43,7 +43,7 @@ import { BudgetDb, DB_NAME, SCHEMA_VERSION, SETTINGS_KEY, VERSION_KEY } from './
 import { deepClone as clone } from './clone'
 import { buildSeed, type SeedData } from './fixtures'
 import { newId, nowIso } from './id'
-import { type DataV1, dataV1ToV2 } from './migrations'
+import { restoreParsed } from './backup'
 import {
   type Debounced,
   type Snapshot,
@@ -106,17 +106,14 @@ export class IndexedDbRepository implements Repository {
 
     // The stores are empty. Before starting the user over from scratch, check whether a
     // snapshot outlived whatever cleared them.
-    const restored = await readSnapshot()
-    if (restored) {
+    // Through the same versioned restore as an imported backup, so a snapshot an older build
+    // wrote is carried forward rather than loaded as old-shaped records stamped current.
+    const snapshot = await readSnapshot()
+    const restored = snapshot ? restoreParsed(snapshot, todayIso()) : null
+    if (restored?.ok) {
       this.restoring = true
       try {
-        // A snapshot written by an older build is carried forward first: loading it as-is would
-        // put old-shaped records into a new-shaped database and stamp them current.
-        await this.load(
-          restored.schemaVersion < 2
-            ? dataV1ToV2(restored as unknown as SeedData & DataV1, todayIso())
-            : restored,
-        )
+        await this.load(restored.data)
       } finally {
         this.restoring = false
       }
@@ -137,6 +134,17 @@ export class IndexedDbRepository implements Repository {
     this.snapshot.cancel()
     this.db.close()
     await this.db.delete()
+  }
+
+  /** Everything stored, archived records included — a backup's contents. */
+  async exportData(): Promise<SeedData> {
+    const { appVersion: _a, schemaVersion: _s, exportedAt: _e, ...data } = await this.exportSnapshot()
+    return data
+  }
+
+  /** Replace everything with `data`, in one transaction. A restored backup lands this way. */
+  async replaceAll(data: SeedData): Promise<void> {
+    await this.load(data)
   }
 
   /** Everything on disk, as one payload. Feeds the snapshot file and file export alike. */

@@ -22,6 +22,26 @@ All notable changes to this project are recorded here. The format follows
   budget for the category. Cycles that started while the app was closed get their copies too, in
   order. It happens once per cycle: delete a copy and it stays deleted; turn "repeat" off, or
   delete this cycle's budget, and the chain ends there. New budgets are one-off by default.
+- **Backup and restore.** Settings → *Export backup* saves everything — archived records included
+  — to one JSON file through the share sheet, so it can go to Drive, email or Downloads with no
+  network code in the app. *Restore from backup* reads a file back:
+  - **Versioned.** Every file now records the app version that wrote it, and that is checked
+    first: it picks the reader for the file's format, so a backup from 1.x is recognised and
+    converted, and one from a newer major version is refused with "update the app" rather than
+    guessed at. Adding a format later means appending a reader; old files keep restoring.
+  - **Previewed.** Before anything is written the app says which version made the file and when,
+    and how many records are new, already here, or different.
+  - **Merge or replace.** Merge keeps everything only one side has; if anything differs, it asks
+    once whether this phone's or the backup's version wins. Replace swaps everything for the file.
+    Either way, what was on the phone is first saved as `my-budget-pre-import.json`.
+  - Budgets are matched by category and cycle as well as by id, so merging a backup from another
+    phone never leaves two plans for one category in one cycle.
+
+### Removed
+
+- "Reload sample data" in Settings — loading demo data over real data had no purpose worth the
+  risk. Onboarding still offers sample data on a fresh start. "Start empty" stays, and now asks for
+  DELETE to be typed.
 
 ### Migration
 

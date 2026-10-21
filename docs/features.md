@@ -318,11 +318,11 @@ or changes data.
 | 14.2 | Reach currencies and rates, with a badge counting missing rates | Built |
 | 14.3 | Change the budget cycle, with a live preview of the resulting dates | Built |
 | 14.4 | Theme: follow system, light, or dark | Built |
-| 14.5 | Reload sample data | Built — **to be removed in D3** |
-| 14.6 | Start empty and run first-time setup again, behind a confirmation | Built — confirmation to be hardened in D3 |
+| ~~14.5~~ | ~~Reload sample data~~ | Removed in 2.0.0 |
+| 14.6 | Start empty and run first-time setup again, behind a confirmation that asks for DELETE to be typed | Built |
 | 14.7 | App lock with fingerprint or PIN | Stub |
-| 14.8 | Export all data to a file | Next (D3) |
-| 14.9 | Import from a file, merging or replacing, with conflicts surfaced first | Next (D3) |
+| 14.8 | Export all data to one file through the share sheet (a download in a browser); the file records the app version that wrote it | Built |
+| 14.9 | Restore from a file: checked against the version that wrote it, previewed (new / already here / differs), then merged — with one choice of winner if anything differs — or replacing everything. What was on the phone is kept in a file first | Built |
 | 14.10 | Google Drive backup and restore | Planned |
 
 **14.5 and 14.6 existed because there was no database.** Decided 2026-08-20: 14.5 is removed —
@@ -379,7 +379,7 @@ because it is expensive to retrofit. Listed so it is visible when scoping the da
 | ID | Function point | Status |
 |---|---|---|
 | 17.1 | Data survives closing the app | **Built** |
-| 17.2 | Export to a single portable file, and import it back | Next (D3) — the file and its payload exist; the share/import UI does not |
+| 17.2 | Export to a single portable file, and import it back | **Built** (2.0.0) |
 | 17.3 | Optional passphrase encryption on the export | Planned — deliberately deferred out of D3 |
 | 17.4 | Google Drive backup, manual and optionally periodic | Planned |
 | 17.5 | App lock with fingerprint or PIN at launch | Planned |

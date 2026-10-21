@@ -14,6 +14,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Money } from '@/domain/money'
+import { buildSnapshot } from '@/data/snapshot'
+import { getRepository } from '@/stores/repository'
 import { createTestStore } from '@/test/pinia'
 
 /** Compact, readable snapshot form — `{ minor, currency }` objects bloat every snapshot. */
@@ -312,6 +314,54 @@ describe('recurring budgets', () => {
     await store.editBudget({ ...august, recurring: false })
     await store.rollRecurringBudgets('2026-09-02')
     expect(inCycle('2026-09-01')).toBe(6)
+  })
+})
+
+describe('backup', () => {
+  /** A backup file of whatever the store holds right now. */
+  const backupOf = async (): Promise<string> =>
+    JSON.stringify(buildSnapshot(await getRepository().exportData(), '2026-08-20T12:00:00.000Z'))
+
+  it('previews a backup of this device as nothing to add and nothing in conflict', async () => {
+    const preview = await store.previewImport(await backupOf())
+    expect(preview.ok && preview.plan.total).toMatchObject({ added: 0, conflicts: 0 })
+  })
+
+  it('says why a file cannot be imported, and writes nothing', async () => {
+    const before = store.transactions.length
+    expect(await store.previewImport('{}')).toMatchObject({ ok: false })
+    expect(store.transactions.length).toBe(before)
+  })
+
+  it('replace puts the backup back exactly, dropping what came after it', async () => {
+    const file = await backupOf()
+    const later = store.wallets[0]
+    await store.editWallet({ ...later, name: 'Renamed after the backup' })
+    await store.addWallet({ ...later, name: 'Added after the backup' })
+
+    const preview = await store.previewImport(file)
+    if (!preview.ok) throw new Error(preview.reason)
+    expect(preview.plan.wallets.conflicts).toBe(1)
+    await store.importBackup(preview.data, 'replace')
+
+    expect(store.wallets.map((w) => w.name)).not.toContain('Added after the backup')
+    expect(store.wallets.find((w) => w.id === later.id)?.name).toBe(later.name)
+  })
+
+  it('merge keeps what only this device has, and lets the chosen side win conflicts', async () => {
+    const file = await backupOf()
+    const first = store.wallets[0]
+    await store.editWallet({ ...first, name: 'Phone version' })
+    await store.addWallet({ ...first, name: 'Phone only' })
+
+    const preview = await store.previewImport(file)
+    if (!preview.ok) throw new Error(preview.reason)
+    await store.importBackup(preview.data, 'merge', 'device')
+    expect(store.wallets.map((w) => w.name)).toEqual(expect.arrayContaining(['Phone version', 'Phone only']))
+
+    await store.importBackup(preview.data, 'merge', 'incoming')
+    expect(store.wallets.find((w) => w.id === first.id)?.name).toBe(first.name)
+    expect(store.wallets.map((w) => w.name)).toContain('Phone only')
   })
 })
 

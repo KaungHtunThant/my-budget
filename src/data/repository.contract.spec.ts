@@ -398,6 +398,33 @@ for (const impl of IMPLS) {
         expect((await repo.getWallet(w.id))?.name).toBe('Renamed via proxy')
       })
     })
+
+    describe('backup', () => {
+      it('exports everything, archived records included, and replaceAll puts it back exactly', async () => {
+        let exported: Awaited<ReturnType<Repository['exportData']>> | null = null
+        await withRepo(async (repo) => {
+          const w = await repo.createWallet(wallet({ name: 'Kept' }))
+          await repo.createWallet(wallet({ name: 'Archived', archived: true }))
+          await repo.createTransaction(tx({ walletId: w.id, note: 'Exported' }))
+          exported = await repo.exportData()
+          expect(exported.wallets.map((x) => x.name).sort()).toEqual(['Archived', 'Kept'])
+        })
+        await withRepo(async (repo) => {
+          await repo.replaceAll(exported!)
+          expect(await repo.exportData()).toEqual(exported)
+          expect((await repo.listTransactions()).map((t) => t.note)).toEqual(['Exported'])
+        })
+      })
+
+      it('replaceAll leaves nothing of what was there before', async () => {
+        await withRepo(async (repo) => {
+          const before = await repo.exportData()
+          await repo.createWallet(wallet({ name: 'Gone after replace' }))
+          await repo.replaceAll(before)
+          expect(await repo.listWallets()).toEqual([])
+        })
+      })
+    })
   })
 }
 

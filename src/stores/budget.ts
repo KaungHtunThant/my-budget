@@ -39,7 +39,23 @@ import type {
   Transaction,
   Wallet,
 } from '@/domain/types'
+import { type ImportPlan, type Winner, mergeBackup, planImport, restoreBackup } from '@/data/backup'
+import { type ShareOutcome, savePreImportCopy, shareBackup } from '@/data/backupFile'
+import type { SeedData } from '@/data/fixtures'
 import { getRepository } from './repository'
+
+/** A backup file read and checked, with what importing it would do — or why it cannot be. */
+export type ImportPreview =
+  | {
+      ok: true
+      data: SeedData
+      appVersion: string | null
+      schemaVersion: number
+      converted: boolean
+      exportedAt: string | null
+      plan: ImportPlan
+    }
+  | { ok: false; reason: string }
 
 export const useBudgetStore = defineStore('budget', () => {
   const repo = getRepository()
@@ -181,6 +197,37 @@ export const useBudgetStore = defineStore('budget', () => {
   async function resetApp(withDemoData: boolean): Promise<void> {
     await repo.reset({ withDemoData, baseCurrency: base.value })
     await reload()
+  }
+
+  // --- backup --------------------------------------------------------------
+
+  /** Everything on the device, out through the share sheet (or a download in a browser). */
+  async function exportBackup(): Promise<ShareOutcome> {
+    return shareBackup(await repo.exportData(), todayIso())
+  }
+
+  /** Read a backup file and work out what importing it would do, writing nothing yet. */
+  async function previewImport(text: string): Promise<ImportPreview> {
+    const restored = restoreBackup(text, todayIso())
+    if (!restored.ok) return restored
+    return { ...restored, plan: planImport(await repo.exportData(), restored.data) }
+  }
+
+  /**
+   * Apply a previewed backup: merged into what is here, or replacing it. The device's data is
+   * kept in a file first either way, then the result goes in as one all-or-nothing write.
+   */
+  async function importBackup(
+    data: SeedData,
+    mode: 'merge' | 'replace',
+    winner: Winner = 'incoming',
+  ): Promise<void> {
+    const device = await repo.exportData()
+    await savePreImportCopy(device)
+    await repo.replaceAll(mode === 'replace' ? data : mergeBackup(device, data, winner))
+    await reload()
+    await rollRecurringBudgets(todayIso())
+    await flushSnapshot()
   }
 
   async function setRate(code: CurrencyCode, rate: number): Promise<void> {
@@ -351,6 +398,9 @@ export const useBudgetStore = defineStore('budget', () => {
     saveSettings,
     completeOnboarding,
     resetApp,
+    exportBackup,
+    previewImport,
+    importBackup,
     setRate,
     goToPreviousPeriod,
     goToNextPeriod,

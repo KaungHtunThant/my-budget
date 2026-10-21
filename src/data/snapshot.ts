@@ -20,6 +20,7 @@
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { SCHEMA_VERSION } from './db'
 import type { SeedData } from './fixtures'
+import { APP_VERSION } from './version'
 
 const DIR = Directory.Data
 const FILE = 'my-budget-snapshot.json'
@@ -30,13 +31,15 @@ export const legacyFile = (schemaVersion: number): string =>
   `my-budget-snapshot.v${schemaVersion}.json`
 
 export interface Snapshot extends SeedData {
+  /** The app version that wrote the file. Absent from files written before 2.0.0. */
+  appVersion: string
   schemaVersion: number
   exportedAt: string
 }
 
 /** Build the payload. Kept separate from writing so export-to-share reuses it verbatim. */
 export function buildSnapshot(data: SeedData, exportedAt: string): Snapshot {
-  return { schemaVersion: SCHEMA_VERSION, exportedAt, ...data }
+  return { appVersion: APP_VERSION, schemaVersion: SCHEMA_VERSION, exportedAt, ...data }
 }
 
 async function readText(path: string): Promise<string | null> {

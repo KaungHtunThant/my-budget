@@ -233,7 +233,7 @@ The outcome is the same: data survives restart, behind the unchanged `Repository
 | **N1** | Repository & contract tests | `IndexedDbRepository` implementing the full interface; one contract suite asserted against it and `MemoryRepository` alike | Done |
 | **N2** | Cut over | One line in `src/stores/repository.ts`; data survives a reload | Done |
 | **N3** | Snapshot backstop | JSON snapshot with temp-then-rename and `.bak`, debounced plus flushed on background, rebuild-on-empty in `init()` | Done |
-| **D3** | Local backup UI | Share/save the snapshot payload, import with conflict-aware merge-or-replace | Next |
+| **D3** | Local backup UI | Share/save the snapshot payload, import with conflict-aware merge-or-replace | Done (2.0.0) |
 | **D4** | Hardening & release | App lock (biometric/PIN), upgrade testing, on-device performance on large history, signed release APK |  |
 | **D5** | Google Drive backup | OAuth sign-in, appDataFolder upload/restore, optional auto-backup |  |
 
@@ -268,6 +268,13 @@ validation, and the transports.
 Work order: pure validation and merge-planning functions with tests → `exportSnapshot` and
 `importSnapshot` onto the `Repository` interface, `MemoryRepository` and the contract suite → store
 actions → the Settings UI and its confirmations → docs.
+
+**Backup files are versioned by app version too (2.0.0).** Every file names the app version that
+wrote it as well as its schema. A restore checks the app version first and uses it to pick the
+reader from `RESTORERS` in `src/data/backup.ts` — one entry per format ever written, append-only —
+then carries the data forward schema by schema. A newer major version is refused with an "update
+the app" message. The automatic snapshot is restored through the same path. A spec fails if a
+schema bump lands without a reader for it.
 
 **Versioning rule.** `SCHEMA_VERSION` in `src/data/db.ts` is the on-disk contract. Every schema
 change bumps the Dexie version with an `upgrade()` hook, and the snapshot carries the version so

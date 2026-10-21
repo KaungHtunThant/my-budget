@@ -242,6 +242,17 @@ export interface Settings {
 // Repository contract
 // ---------------------------------------------------------------------------
 
+/** The whole of a user's data, as one value: settings and every collection. */
+export interface DataSet {
+  settings: Settings
+  wallets: Wallet[]
+  categories: Category[]
+  transactions: Transaction[]
+  budgets: Budget[]
+  rules: RecurringRule[]
+  goals: SavingsGoal[]
+}
+
 /** Fields the caller supplies; ids and timestamps are assigned by the repository. */
 export type NewWallet = Omit<Wallet, 'id' | 'createdAt'>
 export type NewCategory = Omit<Category, 'id'>
@@ -317,6 +328,15 @@ export interface Repository {
    * A prototype affordance that becomes a dev-only tool in Stage 2.
    */
   reset(options?: { withDemoData?: boolean; baseCurrency?: CurrencyCode }): Promise<void>
+
+  /** Everything stored, archived records included: what a backup carries. */
+  exportData(): Promise<DataSet>
+
+  /**
+   * Replace everything with `data`, all or nothing. How a restored backup is applied — merged
+   * first or not — so a failure part-way cannot leave half of one and half of the other.
+   */
+  replaceAll(data: DataSet): Promise<void>
 
   /**
    * Force any pending durability snapshot out to storage, skipping its debounce. Called when
