@@ -2,6 +2,15 @@ import { createRouter, createWebHistory } from '@ionic/vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { useBudgetStore } from '@/stores/budget'
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    /** Reachable before onboarding is complete. */
+    public?: boolean
+    /** Where the hardware back button goes from here. Absent on a top-level page. */
+    parent?: string
+  }
+}
+
 const routes: RouteRecordRaw[] = [
   { path: '/', redirect: '/tabs/home' },
   {
@@ -27,12 +36,38 @@ const routes: RouteRecordRaw[] = [
       { path: ':pathMatch(.*)', redirect: '/tabs/home' },
     ],
   },
-  { path: '/wallets', component: () => import('@/views/WalletsPage/WalletsPage.vue') },
-  { path: '/categories', component: () => import('@/views/CategoriesPage/CategoriesPage.vue') },
-  { path: '/recurring', component: () => import('@/views/RecurringPage/RecurringPage.vue') },
-  { path: '/reports', component: () => import('@/views/ReportsPage/ReportsPage.vue') },
-  { path: '/settings', component: () => import('@/views/SettingsPage/SettingsPage.vue') },
-  { path: '/currencies', component: () => import('@/views/CurrenciesPage/CurrenciesPage.vue') },
+  // Child pages name their parent: the page they are listed on, not wherever they were opened
+  // from. Tabs and onboarding have none — back on them is "press again to exit".
+  {
+    path: '/wallets',
+    component: () => import('@/views/WalletsPage/WalletsPage.vue'),
+    meta: { parent: '/tabs/more' },
+  },
+  {
+    path: '/categories',
+    component: () => import('@/views/CategoriesPage/CategoriesPage.vue'),
+    meta: { parent: '/tabs/more' },
+  },
+  {
+    path: '/recurring',
+    component: () => import('@/views/RecurringPage/RecurringPage.vue'),
+    meta: { parent: '/tabs/more' },
+  },
+  {
+    path: '/reports',
+    component: () => import('@/views/ReportsPage/ReportsPage.vue'),
+    meta: { parent: '/tabs/more' },
+  },
+  {
+    path: '/settings',
+    component: () => import('@/views/SettingsPage/SettingsPage.vue'),
+    meta: { parent: '/tabs/more' },
+  },
+  {
+    path: '/currencies',
+    component: () => import('@/views/CurrenciesPage/CurrenciesPage.vue'),
+    meta: { parent: '/settings' },
+  },
 ]
 
 const router = createRouter({

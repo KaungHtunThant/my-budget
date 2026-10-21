@@ -342,6 +342,7 @@ destructive action behind a stronger confirmation, sitting beside export and imp
 | 15.8 | App icon and splash screen; installable debug APK | Built |
 | 15.9 | Swipe left or right on a tab to move to the next one, with the view sliding in from the side swiped from; no wrap at either end | Built |
 | 15.10 | Dock indicator that tracks the swipe under the finger, springing back if the swipe is abandoned | Built |
+| 15.11 | Android back button: closes the open sheet or dialog first, else returns a child page to the page it is listed on, else asks for a second press within two seconds to exit | Built |
 
 ---
 

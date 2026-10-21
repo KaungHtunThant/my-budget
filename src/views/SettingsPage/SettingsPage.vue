@@ -134,7 +134,7 @@ async function resetEmpty(): Promise<void> {
     <IonHeader :translucent="true">
       <IonToolbar>
         <IonButtons slot="start">
-          <IonBackButton default-href="/tabs/home" />
+          <IonBackButton default-href="/tabs/more" />
         </IonButtons>
         <IonTitle>Settings</IonTitle>
       </IonToolbar>

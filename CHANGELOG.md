@@ -39,9 +39,19 @@ All notable changes to this project are recorded here. The format follows
   horizontally scrollable ancestor, which is what keeps the filter chip strips scrolling. The page
   does *not* follow the finger: tab pages are lazy routes, so the incoming view does not exist to
   drag until the navigation resolves.
+- **The Android back button does what the screen implies, not what history says.** A press closes
+  the topmost open sheet, picker or dialog first — a currency picker inside the transaction form
+  closes alone, leaving the form. With nothing open, a child page returns to the page it is listed
+  on rather than the previous entry, so Wallets, Categories, Recurring, Reports and Settings back
+  out to More and Currencies to Settings, wherever they were opened from. On a tab or in
+  onboarding the first press shows "Press back again to exit" and a second press within two
+  seconds closes the app. The parents live on the routes as `meta.parent`; the decision is one
+  pure function, `router/back.backAction`.
 
 ### Changed
 
+- Settings' on-screen back arrow falls back to More instead of Home, matching where the hardware
+  back button now takes it and where Settings is listed.
 - **Storage is IndexedDB, not SQLite** — the plan's original choice, reversed now that Stage 1
   showed nothing above the repository issues a query. Rationale, trade-offs and measurements in
   [`docs/adr-001-document-store.md`](docs/adr-001-document-store.md).
