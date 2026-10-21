@@ -61,6 +61,13 @@ npm run cap:sync && cd android && ./gradlew assembleDebug
 
 The generated debug APK lands in `android/app/build/outputs/apk/debug/`.
 
+> **Note:** Capacitor 7 needs Java 21. If the default `java` is older, the build stops with
+> `invalid source release: 21`. Point Gradle at JDK 21 for that one command:
+>
+> ```bash
+> JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew assembleDebug
+> ```
+
 ## How it is put together
 
 ```
