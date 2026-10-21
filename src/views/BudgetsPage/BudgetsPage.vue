@@ -5,7 +5,7 @@
  * The pace marker on each bar is the point of this screen: 70% spent means something very
  * different on day 3 than on day 28, and the marker makes that readable at a glance.
  */
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useBudgetContext } from '@/composables/useBudgetContext'
 import {
   IonButton,
@@ -33,6 +33,8 @@ import { iconFor } from '@/theme/icons'
 import CurrencyPicker from '@/components/CurrencyPicker/CurrencyPicker.vue'
 import EmptyState from '@/components/EmptyState/EmptyState.vue'
 import FxRateField from '@/components/FxRateField/FxRateField.vue'
+import NewCategoryModal from '@/components/NewCategoryModal/NewCategoryModal.vue'
+import { NEW_CATEGORY_CHOICE } from '@/services/categories'
 import MoneyText from '@/components/MoneyText/MoneyText.vue'
 import PeriodSwitcher from '@/components/PeriodSwitcher/PeriodSwitcher.vue'
 import ProgressMeter from '@/components/ProgressMeter/ProgressMeter.vue'
@@ -74,6 +76,25 @@ const formRollover = ref(false)
 const formRecurring = ref(false)
 const formPeriodStart = ref('')
 const pickerOpen = ref(false)
+
+// "New category…" in the picker opens a quick-create sheet. The picker briefly holds the
+// sentinel; the new category replaces it, or closing the sheet puts the old choice back.
+const newCategoryOpen = ref(false)
+let categoryBeforeNew: Id | null = null
+watch(formCategoryId, (id, previous) => {
+  if (id !== NEW_CATEGORY_CHOICE) return
+  categoryBeforeNew = previous === NEW_CATEGORY_CHOICE ? null : previous
+  newCategoryOpen.value = true
+})
+
+function pickCreatedCategory(id: Id): void {
+  formCategoryId.value = id
+}
+
+function closeNewCategory(): void {
+  newCategoryOpen.value = false
+  if (formCategoryId.value === NEW_CATEGORY_CHOICE) formCategoryId.value = categoryBeforeNew
+}
 
 const view = computed(() =>
   budgetsView({
@@ -301,6 +322,7 @@ async function remove(): Promise<void> {
                 <IonSelectOption v-for="c in availableCategories" :key="c.id" :value="c.id">
                   {{ c.name }}
                 </IonSelectOption>
+                <IonSelectOption :value="NEW_CATEGORY_CHOICE">+ New category…</IonSelectOption>
               </IonSelect>
             </IonItem>
             <IonItem>
@@ -376,6 +398,12 @@ async function remove(): Promise<void> {
               @dismiss="pickerOpen = false"
             />
           </IonModal>
+          <NewCategoryModal
+            :is-open="newCategoryOpen"
+            :kind="'expense'"
+            @created="(c) => pickCreatedCategory(c.id)"
+            @dismiss="closeNewCategory"
+          />
         </IonContent>
       </IonModal>
     </IonContent>

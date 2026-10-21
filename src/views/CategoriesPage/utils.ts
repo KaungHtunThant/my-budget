@@ -17,11 +17,6 @@ export function visibleCategories(
   return categories.filter((c) => c.kind === kind)
 }
 
-/** A category needs a name; the icon and colour both have defaults. */
-export function canSaveCategory(name: string): boolean {
-  return name.trim().length > 0
-}
-
 /**
  * This cycle's total per category, in base currency.
  *

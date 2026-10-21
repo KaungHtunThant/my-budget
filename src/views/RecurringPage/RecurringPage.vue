@@ -39,6 +39,8 @@ import { useBudgetContext } from '@/composables/useBudgetContext'
 import CurrencyPicker from '@/components/CurrencyPicker/CurrencyPicker.vue'
 import EmptyState from '@/components/EmptyState/EmptyState.vue'
 import FxRateField from '@/components/FxRateField/FxRateField.vue'
+import NewCategoryModal from '@/components/NewCategoryModal/NewCategoryModal.vue'
+import { NEW_CATEGORY_CHOICE } from '@/services/categories'
 import MoneyText from '@/components/MoneyText/MoneyText.vue'
 import type { CurrencyCode } from '@/domain/currency'
 import { amountPlaceholder } from '@/domain/format'
@@ -85,6 +87,25 @@ const dayOfMonth = ref(1)
 const weekday = ref(1)
 const active = ref(true)
 const pickerOpen = ref(false)
+
+// "New category…" in the picker opens a quick-create sheet. The picker briefly holds the
+// sentinel; the new category replaces it, or closing the sheet puts the old choice back.
+const newCategoryOpen = ref(false)
+let categoryBeforeNew: Id | null = null
+watch(categoryId, (id, previous) => {
+  if (id !== NEW_CATEGORY_CHOICE) return
+  categoryBeforeNew = previous === NEW_CATEGORY_CHOICE ? null : previous
+  newCategoryOpen.value = true
+})
+
+function pickCreatedCategory(id: Id): void {
+  categoryId.value = id
+}
+
+function closeNewCategory(): void {
+  newCategoryOpen.value = false
+  if (categoryId.value === NEW_CATEGORY_CHOICE) categoryId.value = categoryBeforeNew
+}
 
 const FREQUENCIES: { value: RecurrenceFrequency; label: string }[] = [
   { value: 'weekly', label: 'Weekly' },
@@ -371,6 +392,7 @@ async function addNow(rule: RecurringRule): Promise<void> {
                 <IonSelectOption v-for="c in availableCategories" :key="c.id" :value="c.id">
                   {{ c.name }}
                 </IonSelectOption>
+                <IonSelectOption :value="NEW_CATEGORY_CHOICE">+ New category…</IonSelectOption>
               </IonSelect>
             </IonItem>
             <IonItem>
@@ -445,6 +467,12 @@ async function addNow(rule: RecurringRule): Promise<void> {
               @dismiss="pickerOpen = false"
             />
           </IonModal>
+          <NewCategoryModal
+            :is-open="newCategoryOpen"
+            :kind="type === 'income' ? 'income' : 'expense'"
+            @created="(c) => pickCreatedCategory(c.id)"
+            @dismiss="closeNewCategory"
+          />
         </IonContent>
       </IonModal>
     </IonContent>

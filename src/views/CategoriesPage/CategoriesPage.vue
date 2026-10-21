@@ -30,16 +30,18 @@ import {
   IonToolbar,
 } from '@ionic/vue'
 import { addOutline, close, pricetagsOutline, trashOutline } from 'ionicons/icons'
-import { CATEGORY_ICON_NAMES, iconFor } from '@/theme/icons'
+import { iconFor } from '@/theme/icons'
+import CategoryAppearance from '@/components/CategoryAppearance/CategoryAppearance.vue'
 import EmptyState from '@/components/EmptyState/EmptyState.vue'
 import MoneyText from '@/components/MoneyText/MoneyText.vue'
 import { useBudgetContext } from '@/composables/useBudgetContext'
 import { inPeriod } from '@/domain/budgeting'
 import { zero } from '@/domain/money'
 import type { Category, CategoryKind, Id } from '@/domain/types'
+import { buildCategory, canSaveCategory, defaultAppearance } from '@/services/categories'
 import { useBudgetStore } from '@/stores/budget'
 
-import { canSaveCategory, categoryTotals, visibleCategories } from './utils'
+import { categoryTotals, visibleCategories } from './utils'
 
 const store = useBudgetStore()
 const { ctx, period } = useBudgetContext()
@@ -51,10 +53,6 @@ const name = ref('')
 const kind = ref<CategoryKind>('expense')
 const icon = ref('pricetag-outline')
 const color = ref('primary')
-
-const ICONS = CATEGORY_ICON_NAMES
-
-const COLORS = ['primary', 'secondary', 'tertiary', 'success', 'warning', 'danger', 'medium']
 
 const visible = computed(() => visibleCategories(store.categories, tab.value))
 
@@ -74,8 +72,7 @@ function openNew(): void {
   editingId.value = null
   name.value = ''
   kind.value = tab.value
-  icon.value = tab.value === 'income' ? 'trending-up-outline' : 'pricetag-outline'
-  color.value = tab.value === 'income' ? 'success' : 'primary'
+  ;({ icon: icon.value, color: color.value } = defaultAppearance(tab.value))
   modalOpen.value = true
 }
 
@@ -101,14 +98,9 @@ async function save(): Promise<void> {
       })
     }
   } else {
-    await store.addCategory({
-      name: name.value.trim(),
-      kind: kind.value,
-      parentId: null,
-      icon: icon.value,
-      color: color.value,
-      archived: false,
-    })
+    await store.addCategory(
+      buildCategory({ name: name.value, kind: kind.value, icon: icon.value, color: color.value }),
+    )
   }
   modalOpen.value = false
 }
@@ -201,32 +193,7 @@ async function remove(): Promise<void> {
             </IonItem>
           </IonList>
 
-          <div class="picker-label app-muted">Icon</div>
-          <div class="icon-grid">
-            <button
-              v-for="option in ICONS"
-              :key="option"
-              type="button"
-              class="icon-option"
-              :class="{ 'icon-option--on': option === icon }"
-              @click="icon = option"
-            >
-              <IonIcon :icon="iconFor(option)" />
-            </button>
-          </div>
-
-          <div class="picker-label app-muted">Colour</div>
-          <div class="color-row">
-            <button
-              v-for="option in COLORS"
-              :key="option"
-              type="button"
-              class="color-option"
-              :class="{ 'color-option--on': option === color }"
-              :style="{ background: `var(--ion-color-${option})` }"
-              @click="color = option"
-            />
-          </div>
+          <CategoryAppearance v-model:icon="icon" v-model:color="color" />
 
           <IonNote class="modal-note">
             Deleting a category keeps its transactions — they simply become uncategorised.
@@ -262,54 +229,6 @@ async function remove(): Promise<void> {
 .note {
   font-size: 0.78rem;
   padding: 4px 6px;
-}
-
-.picker-label {
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 18px 4px 8px;
-}
-
-.icon-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
-}
-
-.icon-option {
-  display: grid;
-  place-items: center;
-  aspect-ratio: 1;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-sm);
-  background: var(--app-surface);
-  color: inherit;
-  cursor: pointer;
-  font-size: 18px;
-}
-
-.icon-option--on {
-  border-color: var(--ion-color-primary);
-  background: rgba(var(--ion-color-primary-rgb), 0.12);
-  color: var(--ion-color-primary);
-}
-
-.color-row {
-  display: flex;
-  gap: 10px;
-}
-
-.color-option {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  cursor: pointer;
-}
-
-.color-option--on {
-  border-color: var(--ion-text-color);
-  box-shadow: 0 0 0 2px var(--app-surface) inset;
 }
 
 .modal-note {

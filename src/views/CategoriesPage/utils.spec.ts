@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { CurrencyCode } from '@/domain/currency'
 import type { Category, CategoryKind, Transaction, TransactionType } from '@/domain/types'
 
-import { canSaveCategory, categoryTotals, visibleCategories } from './utils'
+import { categoryTotals, visibleCategories } from './utils'
 
 const category = (id: string, kind: CategoryKind): Category => ({
   id,
@@ -44,13 +44,6 @@ describe('visibleCategories', () => {
     const all = [category('rent', 'expense'), category('salary', 'income')]
     expect(visibleCategories(all, 'expense').map((c) => c.id)).toEqual(['rent'])
     expect(visibleCategories(all, 'income').map((c) => c.id)).toEqual(['salary'])
-  })
-})
-
-describe('canSaveCategory', () => {
-  it('needs a name', () => {
-    expect(canSaveCategory('Rent')).toBe(true)
-    expect(canSaveCategory('  ')).toBe(false)
   })
 })
 

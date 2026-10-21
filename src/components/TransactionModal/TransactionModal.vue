@@ -38,6 +38,8 @@ import {
 import { close, trashOutline } from 'ionicons/icons'
 import CurrencyPicker from '../CurrencyPicker/CurrencyPicker.vue'
 import FxRateField from '../FxRateField/FxRateField.vue'
+import NewCategoryModal from '@/components/NewCategoryModal/NewCategoryModal.vue'
+import { NEW_CATEGORY_CHOICE } from '@/services/categories'
 import type { CurrencyCode } from '@/domain/currency'
 import { amountPlaceholder } from '@/domain/format'
 import { toDecimalString } from '@/domain/money'
@@ -84,6 +86,25 @@ const note = ref('')
 const saving = ref(false)
 const error = ref('')
 const pickerOpen = ref(false)
+
+// "New category…" in the picker opens a quick-create sheet. The picker briefly holds the
+// sentinel; the new category replaces it, or closing the sheet puts the old choice back.
+const newCategoryOpen = ref(false)
+let categoryBeforeNew: Id | null = null
+watch(categoryId, (id, previous) => {
+  if (id !== NEW_CATEGORY_CHOICE) return
+  categoryBeforeNew = previous === NEW_CATEGORY_CHOICE ? null : previous
+  newCategoryOpen.value = true
+})
+
+function pickCreatedCategory(id: Id): void {
+  categoryId.value = id
+}
+
+function closeNewCategory(): void {
+  newCategoryOpen.value = false
+  if (categoryId.value === NEW_CATEGORY_CHOICE) categoryId.value = categoryBeforeNew
+}
 
 const editing = computed(() => props.transaction !== null)
 
@@ -329,6 +350,7 @@ async function remove(): Promise<void> {
           <IonSelectOption v-for="c in availableCategories" :key="c.id" :value="c.id">
             {{ c.name }}
           </IonSelectOption>
+          <IonSelectOption :value="NEW_CATEGORY_CHOICE">+ New category…</IonSelectOption>
         </IonSelect>
       </IonItem>
 
@@ -397,6 +419,12 @@ async function remove(): Promise<void> {
         @dismiss="pickerOpen = false"
       />
     </IonModal>
+    <NewCategoryModal
+      :is-open="newCategoryOpen"
+      :kind="type === 'income' ? 'income' : 'expense'"
+      @created="(c) => pickCreatedCategory(c.id)"
+      @dismiss="closeNewCategory"
+    />
   </IonContent>
 </template>
 

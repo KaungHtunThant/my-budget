@@ -145,6 +145,7 @@ intact.
 | 6.5 | Choose an icon per category | Built |
 | 6.6 | Choose a colour per category, used consistently in charts and progress bars | Built |
 | 6.7 | Delete a category — its transactions are kept and become uncategorised | Built |
+| 6.8 | Create a category straight from any category picker (transaction, budget, recurring rule) via "+ New category…", without leaving the form; a name that already exists selects that category instead | Built |
 
 **Required by:** budgets (§7), the category breakdown (12.3–12.5), allocation targets (9.x).
 

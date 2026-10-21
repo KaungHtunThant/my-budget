@@ -6,6 +6,14 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Create a category without leaving the form.** Every category picker — transactions, budgets
+  and recurring rules — ends with "+ New category…", which opens a small sheet for the name, icon
+  and colour. The new category is selected as soon as it is created; closing the sheet puts the
+  previous choice back. It is a spending or income category to match the form. Typing a name that
+  already exists selects that category instead of making a duplicate.
+
 ## [2.0.0] — 2026-10-21
 
 Every cycle now has its own budget plan, with recurring budgets copied forward, and the app can
