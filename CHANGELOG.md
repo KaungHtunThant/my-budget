@@ -6,6 +6,31 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: every cycle has its own budget plan.** A budget used to be one limit per category
+  that applied to every cycle, so changing it rewrote every month at once. Now each budget belongs
+  to one cycle — the one on screen when it was made — and can be edited or deleted without
+  touching any other. Plan next month ahead by switching to it and adding budgets there.
+  Rollover now takes in what *the previous cycle's own budget* left unspent, so a cycle with no
+  budget for a category has nothing to carry.
+
+### Added
+
+- **Recurring budgets.** Turn on "Repeat every cycle" and the budget is copied into each new
+  cycle as it starts, limit, rollover and currency included, unless that cycle already has a
+  budget for the category. Cycles that started while the app was closed get their copies too, in
+  order. It happens once per cycle: delete a copy and it stays deleted; turn "repeat" off, or
+  delete this cycle's budget, and the chain ends there. New budgets are one-off by default.
+
+### Migration
+
+- Schema 1 → 2 runs on first launch. Each existing budget is copied into every cycle from your
+  earliest transaction to now, marked recurring, so every past month reads exactly as before —
+  rollovers included. The last schema-1 snapshot file is kept as `my-budget-snapshot.v1.json` in
+  the app's data directory, out of reach of the normal `.bak` rotation. Restoring from an old
+  snapshot runs the same transform.
+
 ## [1.1.0] — 2026-10-21
 
 Stage 2, first half: data now survives closing the app, and the money logic has moved out of

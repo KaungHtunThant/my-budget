@@ -19,6 +19,7 @@
 
 import { type Money, money } from '@/domain/money'
 import type { CurrencyCode } from '@/domain/currency'
+import { todayIso } from '@/domain/period'
 import type {
   Budget,
   Category,
@@ -42,6 +43,7 @@ import { BudgetDb, DB_NAME, SCHEMA_VERSION, SETTINGS_KEY, VERSION_KEY } from './
 import { deepClone as clone } from './clone'
 import { buildSeed, type SeedData } from './fixtures'
 import { newId, nowIso } from './id'
+import { type DataV1, dataV1ToV2 } from './migrations'
 import {
   type Debounced,
   type Snapshot,
@@ -108,7 +110,13 @@ export class IndexedDbRepository implements Repository {
     if (restored) {
       this.restoring = true
       try {
-        await this.load(restored)
+        // A snapshot written by an older build is carried forward first: loading it as-is would
+        // put old-shaped records into a new-shaped database and stamp them current.
+        await this.load(
+          restored.schemaVersion < 2
+            ? dataV1ToV2(restored as unknown as SeedData & DataV1, todayIso())
+            : restored,
+        )
       } finally {
         this.restoring = false
       }

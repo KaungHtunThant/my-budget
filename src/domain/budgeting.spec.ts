@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   type BaseContext,
   budgetStatus,
+  budgetStatuses,
+  budgetsInPeriod,
   budgetTotals,
   goalStatus,
   periodSummary,
@@ -27,6 +29,17 @@ const groceries: Category = {
 }
 
 const dining: Category = { ...groceries, id: 'cat_dining', name: 'Dining out' }
+
+/** A budget for `categoryId` in the cycle starting `periodStart`. */
+const plan = (categoryId: string, periodStart: string, limit: number): Budget => ({
+  id: `bdg_${categoryId}_${periodStart}`,
+  categoryId,
+  periodStart,
+  limit: fromMajor(limit, 'USD'),
+  rollover: false,
+  recurring: false,
+  archived: false,
+})
 
 function expense(amount: number, date: string, categoryId: string, currency = 'USD'): Transaction {
   return {
@@ -68,10 +81,14 @@ describe('budgetStatus', () => {
   const budget: Budget = {
     id: 'bdg_1',
     categoryId: groceries.id,
+    periodStart: '2026-08-01',
     limit: fromMajor(400, 'USD'),
     rollover: false,
+    recurring: false,
     archived: false,
   }
+  /** July's plan for the same category: what a rolling August budget carries from. */
+  const july: Budget = { ...budget, id: 'bdg_0', periodStart: '2026-07-01' }
 
   it('counts only expenses in the period and category', () => {
     const txs = [
@@ -80,7 +97,7 @@ describe('budgetStatus', () => {
       expense(999, '2026-07-30', groceries.id), // previous period
       expense(999, '2026-08-06', dining.id), // other category
     ]
-    const status = budgetStatus(budget, groceries, txs, AUGUST, MONTH, USD)
+    const status = budgetStatus(budget, undefined, groceries, txs, AUGUST, MONTH, USD)
     expect(status.spent).toEqual(fromMajor(150, 'USD'))
     expect(status.remaining).toEqual(fromMajor(250, 'USD'))
     expect(status.percentUsed).toBeCloseTo(37.5)
@@ -90,6 +107,7 @@ describe('budgetStatus', () => {
   it('flags overspend', () => {
     const status = budgetStatus(
       budget,
+      undefined,
       groceries,
       [expense(450, '2026-08-05', groceries.id)],
       AUGUST,
@@ -103,6 +121,7 @@ describe('budgetStatus', () => {
   it('converts foreign-currency spend into the base currency', () => {
     const status = budgetStatus(
       budget,
+      undefined,
       groceries,
       [expense(50, '2026-08-05', groceries.id, 'EUR')],
       AUGUST,
@@ -116,7 +135,7 @@ describe('budgetStatus', () => {
     const rolling: Budget = { ...budget, rollover: true }
     // Spent 300 of 400 in July, leaving 100 to carry into August.
     const txs = [expense(300, '2026-07-10', groceries.id), expense(50, '2026-08-05', groceries.id)]
-    const status = budgetStatus(rolling, groceries, txs, AUGUST, MONTH, USD)
+    const status = budgetStatus(rolling, july, groceries, txs, AUGUST, MONTH, USD)
     expect(status.carriedIn).toEqual(fromMajor(100, 'USD'))
     expect(status.limit).toEqual(fromMajor(500, 'USD'))
     expect(status.remaining).toEqual(fromMajor(450, 'USD'))
@@ -126,6 +145,7 @@ describe('budgetStatus', () => {
     const rolling: Budget = { ...budget, rollover: true }
     const status = budgetStatus(
       rolling,
+      july,
       groceries,
       [expense(500, '2026-07-10', groceries.id)],
       AUGUST,
@@ -143,7 +163,7 @@ describe('budgetStatus', () => {
       expense(20, '2026-05-04', dining.id),
       expense(50, '2026-08-05', groceries.id),
     ]
-    const status = budgetStatus(rolling, groceries, txs, AUGUST, MONTH, USD)
+    const status = budgetStatus(rolling, july, groceries, txs, AUGUST, MONTH, USD)
     expect(status.carriedIn).toEqual(fromMajor(400, 'USD'))
     expect(status.limit).toEqual(fromMajor(800, 'USD'))
   })
@@ -153,6 +173,7 @@ describe('budgetStatus', () => {
     // The only history is in August, so July was not an "unspent" period — it was empty.
     const status = budgetStatus(
       rolling,
+      july,
       groceries,
       [expense(50, '2026-08-05', groceries.id)],
       AUGUST,
@@ -166,6 +187,7 @@ describe('budgetStatus', () => {
   it('ignores carry-in entirely when rollover is off', () => {
     const status = budgetStatus(
       budget,
+      july,
       groceries,
       [expense(10, '2026-07-10', groceries.id)],
       AUGUST,
@@ -175,17 +197,73 @@ describe('budgetStatus', () => {
     expect(status.carriedIn.minor).toBe(0)
     expect(status.limit).toEqual(fromMajor(400, 'USD'))
   })
+  it('carries nothing when last cycle had no budget for the category', () => {
+    // Each cycle has its own plan: July without one left no room unspent, however little
+    // was spent on groceries then.
+    const rolling: Budget = { ...budget, rollover: true }
+    const txs = [expense(10, '2026-07-10', groceries.id), expense(50, '2026-08-05', groceries.id)]
+    const status = budgetStatus(rolling, undefined, groceries, txs, AUGUST, MONTH, USD)
+    expect(status.carriedIn.minor).toBe(0)
+    expect(status.limit).toEqual(fromMajor(400, 'USD'))
+  })
+
+  it('carries what last cycle’s own limit left, not this cycle’s', () => {
+    const rolling: Budget = { ...budget, rollover: true }
+    const smallJuly: Budget = { ...july, limit: fromMajor(250, 'USD') }
+    const txs = [expense(200, '2026-07-10', groceries.id)]
+    const status = budgetStatus(rolling, smallJuly, groceries, txs, AUGUST, MONTH, USD)
+    expect(status.carriedIn).toEqual(fromMajor(50, 'USD'))
+    expect(status.limit).toEqual(fromMajor(450, 'USD'))
+  })
+})
+
+describe('budgetsInPeriod', () => {
+  it('keeps the budgets whose cycle start falls inside the period', () => {
+    const budgets = [
+      plan(groceries.id, '2026-07-01', 400),
+      plan(groceries.id, '2026-08-01', 420),
+      plan(dining.id, '2026-09-01', 100),
+    ]
+    expect(budgetsInPeriod(budgets, AUGUST).map((b) => b.limit)).toEqual([fromMajor(420, 'USD')])
+  })
+
+  it('re-homes a budget by containment after the cycle setting changes', () => {
+    // A budget made under calendar months, read under a 25th-anchored cycle.
+    const anchored = periodFor('2026-08-11', { type: 'anchored-month', anchorDay: 25 })
+    const budgets = [plan(groceries.id, '2026-08-01', 400)]
+    expect(budgetsInPeriod(budgets, anchored)).toHaveLength(1)
+  })
+
+  it('lets the later-starting plan win when two meet in one cycle', () => {
+    const budgets = [plan(groceries.id, '2026-08-01', 400), plan(groceries.id, '2026-08-15', 300)]
+    const wide = { start: '2026-08-01', end: '2026-08-31', label: 'August' }
+    expect(budgetsInPeriod(budgets, wide).map((b) => b.periodStart)).toEqual(['2026-08-15'])
+  })
+})
+
+describe('budgetStatuses', () => {
+  it('shows only the selected cycle’s budgets, each rolling from its own predecessor', () => {
+    const budgets = [
+      { ...plan(groceries.id, '2026-07-01', 300), id: 'jul' },
+      { ...plan(groceries.id, '2026-08-01', 400), id: 'aug', rollover: true },
+      { ...plan(dining.id, '2026-09-01', 100), id: 'sep' },
+    ]
+    const txs = [expense(100, '2026-07-10', groceries.id), expense(50, '2026-08-05', groceries.id)]
+    const statuses = budgetStatuses(budgets, [groceries, dining], txs, AUGUST, MONTH, USD)
+    expect(statuses.map((s) => s.budget.id)).toEqual(['aug'])
+    expect(statuses[0].carriedIn).toEqual(fromMajor(200, 'USD'))
+  })
 })
 
 describe('budgetTotals', () => {
   it('aggregates limits, spend and overspend count', () => {
     const budgets: Budget[] = [
-      { id: 'b1', categoryId: groceries.id, limit: fromMajor(400, 'USD'), rollover: false, archived: false },
-      { id: 'b2', categoryId: dining.id, limit: fromMajor(100, 'USD'), rollover: false, archived: false },
+      { ...plan(groceries.id, '2026-08-01', 400), id: 'b1' },
+      { ...plan(dining.id, '2026-08-01', 100), id: 'b2' },
     ]
     const txs = [expense(150, '2026-08-05', groceries.id), expense(120, '2026-08-06', dining.id)]
     const statuses = budgets.map((b, i) =>
-      budgetStatus(b, i === 0 ? groceries : dining, txs, AUGUST, MONTH, USD),
+      budgetStatus(b, undefined, i === 0 ? groceries : dining, txs, AUGUST, MONTH, USD),
     )
     const totals = budgetTotals(statuses, 'USD')
     expect(totals.budgeted).toEqual(fromMajor(500, 'USD'))

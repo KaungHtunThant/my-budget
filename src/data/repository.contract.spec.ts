@@ -10,7 +10,8 @@
  * whatever order the repository returned, so ordering is asserted here, not left to chance.
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import Dexie from 'dexie'
 import { reactive } from 'vue'
 import { fromMajor } from '@/domain/money'
 import type {
@@ -207,8 +208,10 @@ for (const impl of IMPLS) {
         const spent = await repo.createTransaction(tx({ walletId: w.id, categoryId: category.id }))
         await repo.createBudget({
           categoryId: category.id,
+          periodStart: '2026-08-01',
           limit: fromMajor(100, 'USD'),
           rollover: false,
+          recurring: false,
           archived: false,
         })
 
@@ -277,8 +280,10 @@ for (const impl of IMPLS) {
 
         const budget = await repo.createBudget({
           categoryId: category.id,
+          periodStart: '2026-08-01',
           limit: fromMajor(100, 'USD'),
           rollover: false,
+          recurring: false,
           archived: false,
         })
         await repo.updateBudget({ ...budget, limit: fromMajor(250, 'USD') })
@@ -418,6 +423,86 @@ describe('IndexedDbRepository persistence', () => {
       expect(await second.listWallets()).toHaveLength(1)
     } finally {
       await second.destroy()
+    }
+  })
+})
+
+describe('IndexedDbRepository schema upgrade', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /** A database exactly as a 1.x build left it: schema 1, one budget per category. */
+  async function seedSchemaV1(name: string): Promise<void> {
+    const v1 = new Dexie(name)
+    v1.version(1).stores({
+      wallets: 'id',
+      categories: 'id, kind',
+      transactions: 'id, date, walletId, toWalletId, categoryId, goalId',
+      budgets: 'id, categoryId',
+      rules: 'id',
+      goals: 'id',
+      meta: 'key',
+    })
+    await v1.open()
+    await v1.table('meta').bulkPut([
+      {
+        key: 'settings',
+        value: {
+          baseCurrency: 'USD',
+          activeCurrencies: ['USD'],
+          rates: {},
+          budgetPeriod: { type: 'calendar-month' },
+          theme: 'system',
+          appLockEnabled: false,
+          onboardingComplete: true,
+        },
+      },
+      { key: 'schemaVersion', value: 1 },
+    ])
+    await v1
+      .table('transactions')
+      .put({ ...tx({ date: '2026-06-10', note: 'June' }), id: 'txn_june', createdAt: '2026-06-10' })
+    await v1.table('budgets').bulkPut([
+      { id: 'bdg_food', categoryId: 'cat_food', limit: fromMajor(400, 'USD'), rollover: true, archived: false },
+      { id: 'bdg_rent', categoryId: 'cat_rent', limit: fromMajor(950, 'USD'), rollover: false, archived: false },
+    ])
+    v1.close()
+  }
+
+  it('gives every schema-1 budget a recurring copy in each cycle of its history', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-08-20T12:00:00'))
+    const name = `upgrade-${dbCounter++}`
+    await seedSchemaV1(name)
+
+    const repo = new IndexedDbRepository({ name, snapshots: false })
+    await repo.init()
+    try {
+      const budgets = await repo.listBudgets()
+      expect(budgets.map((b) => `${b.id} ${b.periodStart} ${b.recurring}`).sort()).toEqual([
+        'bdg_food 2026-08-01 true',
+        'bdg_food@2026-06-01 2026-06-01 true',
+        'bdg_food@2026-07-01 2026-07-01 true',
+        'bdg_rent 2026-08-01 true',
+        'bdg_rent@2026-06-01 2026-06-01 true',
+        'bdg_rent@2026-07-01 2026-07-01 true',
+      ])
+      expect((await repo.getSettings()).budgetsRolledInto).toBe('2026-08-01')
+      // Everything else is left exactly as it was.
+      expect((await repo.listTransactions()).map((t) => t.note)).toEqual(['June'])
+      expect((await repo.getSettings()).onboardingComplete).toBe(true)
+    } finally {
+      repo.close()
+    }
+
+    // A second launch finds schema 2 and must not migrate again.
+    const again = new IndexedDbRepository({ name, snapshots: false })
+    await again.init()
+    try {
+      expect(await again.listBudgets()).toHaveLength(6)
+    } finally {
+      await again.destroy()
     }
   })
 })

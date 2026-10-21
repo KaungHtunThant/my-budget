@@ -13,7 +13,7 @@
 
 import { type CurrencyCode } from '@/domain/currency'
 import { fromMajor, type Money } from '@/domain/money'
-import { addDays, addMonths, DEFAULT_PERIOD_CONFIG, todayIso } from '@/domain/period'
+import { addDays, addMonths, DEFAULT_PERIOD_CONFIG, periodFor, todayIso } from '@/domain/period'
 import type {
   Budget,
   Category,
@@ -23,6 +23,8 @@ import type {
   Transaction,
   Wallet,
 } from '@/domain/types'
+
+import { type BudgetV1, budgetsToV2 } from './migrations'
 
 export interface SeedData {
   settings: Settings
@@ -69,6 +71,8 @@ export function buildSeed(
     theme: 'system',
     appLockEnabled: false,
     onboardingComplete: false,
+    // Nothing to copy yet, and nothing to copy into this cycle: it starts out as it is.
+    budgetsRolledInto: periodFor(todayIso(), DEFAULT_PERIOD_CONFIG).start,
   }
 
   if (!options.withDemoData) {
@@ -167,7 +171,9 @@ function buildDemo(base: CurrencyCode, categories: Category[], settings: Setting
     },
   ]
 
-  const budgets: Budget[] = [
+  // One plan per category, given its own copy in every cycle of the demo's history the way a
+  // schema-1 install is migrated — so the demo shows per-cycle budgets with real rollovers.
+  const plans: BudgetV1[] = [
     { id: 'bdg_rent', categoryId: catId('Rent'), limit: m(950), rollover: false, archived: false },
     { id: 'bdg_grocery', categoryId: catId('Groceries'), limit: m(400), rollover: true, archived: false },
     { id: 'bdg_transport', categoryId: catId('Transport'), limit: m(120), rollover: false, archived: false },
@@ -378,7 +384,7 @@ function buildDemo(base: CurrencyCode, categories: Category[], settings: Setting
     wallets,
     categories,
     transactions,
-    budgets,
+    budgets: budgetsToV2(plans, transactions, settings.budgetPeriod, today),
     rules,
     goals,
   }

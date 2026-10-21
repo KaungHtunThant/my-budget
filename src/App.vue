@@ -5,6 +5,7 @@ import { IonApp, IonRouterOutlet, toastController, useBackButton, useIonRouter }
 import { App as CapacitorApp } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import { Keyboard } from '@capacitor/keyboard'
+import { todayIso } from '@/domain/period'
 import { useBudgetStore } from '@/stores/budget'
 import { EXIT_WINDOW_MS, backAction } from '@/router/back'
 import { coveredHeight, revealDelta } from '@/shell/keyboard'
@@ -75,6 +76,8 @@ useBackButton(10, async () => {
  */
 void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
   if (!isActive) void store.flushSnapshot()
+  // An app left in the background can wake up in a new cycle, owed its recurring budgets.
+  else if (store.ready) void store.rollRecurringBudgets(todayIso())
 })
 
 /**

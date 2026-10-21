@@ -83,6 +83,13 @@ carries the admission test for each layer and the rules that settle the awkward 
 └─────────────────────────────────────────────┘
 ```
 
+> **Amended 2026-10-21 (2.0.0).** Budgets are per cycle: each carries the `periodStart` of the
+> cycle it plans and a `recurring` flag, and recurring ones are copied into each new cycle as it
+> starts (`services/budgets`, run by the store at launch and on resume). This is schema 2 — the
+> first time the versioning rule below is exercised: a Dexie `upgrade()` and the snapshot restore
+> path share one transform, `src/data/migrations.ts`, which gives every schema-1 budget a copy in
+> each cycle of the user's history so nothing they could see changes.
+
 > **Amended 2026-08-20.** The store used to hold derived totals as well as state; the layering
 > refactor moved every calculation out of it and out of the view scripts. What a store may still
 > hold is decided by the SELECT test in [`architecture.md`](architecture.md), and

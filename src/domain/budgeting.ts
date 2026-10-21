@@ -89,15 +89,38 @@ export function incomeOnly(transactions: readonly Transaction[]): Transaction[] 
 // ---------------------------------------------------------------------------
 
 /**
- * Status of one budget for one period.
+ * The budgets that plan `period`, at most one per category.
  *
- * When `rollover` is on, unspent room from the immediately preceding period is carried in.
- * The carry deliberately does not compound across many periods: a £400 grocery budget with
- * two quiet months would otherwise present a £1,200 limit, which reads as a bug rather
- * than a feature and makes the remaining figure meaningless.
+ * A budget belongs to the cycle containing its `periodStart` rather than the one starting exactly
+ * on it, so changing the cycle setting re-homes old budgets instead of hiding them. That is also
+ * the only way two budgets for one category can meet in one cycle; the later-starting one is the
+ * newer plan and wins.
+ */
+export function budgetsInPeriod(budgets: readonly Budget[], period: Period): Budget[] {
+  const byCategory = new Map<Id, Budget>()
+  for (const budget of budgets) {
+    if (!isWithin(budget.periodStart, period)) continue
+    const held = byCategory.get(budget.categoryId)
+    if (!held || budget.periodStart > held.periodStart) byCategory.set(budget.categoryId, budget)
+  }
+  return [...byCategory.values()]
+}
+
+/**
+ * Status of one budget for its period.
+ *
+ * When `rollover` is on, the unspent room of `previous` — the same category's budget in the
+ * immediately preceding cycle — is carried in. No previous budget means nothing to carry: each
+ * cycle has its own plan, and a cycle without one had no room to leave unspent.
+ *
+ * The carry deliberately does not compound across many periods: a £400 grocery budget with two
+ * quiet months would otherwise present a £1,200 limit, which reads as a bug rather than a feature
+ * and makes the remaining figure meaningless. It is the previous budget's own limit that counts,
+ * never its own carry-in.
  */
 export function budgetStatus(
   budget: Budget,
+  previous: Budget | undefined,
   category: Category,
   transactions: readonly Transaction[],
   period: Period,
@@ -105,9 +128,10 @@ export function budgetStatus(
   ctx: BaseContext,
 ): BudgetStatus {
   const spentResult = spentOnCategory(transactions, budget.categoryId, period, ctx)
-  const carriedIn = budget.rollover
-    ? carryInFor(budget, transactions, period, config, ctx)
-    : zero(ctx.base)
+  const carriedIn =
+    budget.rollover && previous
+      ? carryInFor(previous, transactions, period, config, ctx)
+      : zero(ctx.base)
 
   const limit = add(budget.limit, carriedIn)
   const remaining = subtract(limit, spentResult.total)
@@ -136,22 +160,23 @@ function spentOnCategory(
   return totalise(amounts, ctx)
 }
 
+/** What `previous` — last cycle's budget — left unspent, to carry into `period`. */
 function carryInFor(
-  budget: Budget,
+  previous: Budget,
   transactions: readonly Transaction[],
   period: Period,
   config: BudgetPeriodConfig,
   ctx: BaseContext,
 ): Money {
-  const previous = shiftPeriod(period.start, config, -1)
+  const previousPeriod = shiftPeriod(period.start, config, -1)
 
   // A period entirely before any recorded history is not "unspent" — there was simply
   // nothing there yet. Carrying its full limit would invent budget out of nothing.
   const earliest = earliestDate(transactions)
-  if (earliest === null || previous.end < earliest) return zero(ctx.base)
+  if (earliest === null || previousPeriod.end < earliest) return zero(ctx.base)
 
-  const spent = spentOnCategory(transactions, budget.categoryId, previous, ctx).total
-  const leftover = budget.limit.minor - spent.minor
+  const spent = spentOnCategory(transactions, previous.categoryId, previousPeriod, ctx).total
+  const leftover = previous.limit.minor - spent.minor
   return money(Math.max(0, leftover), ctx.base)
 }
 
@@ -163,6 +188,10 @@ function earliestDate(transactions: readonly Transaction[]): string | null {
   return earliest
 }
 
+/**
+ * Statuses for the budgets that plan `period`, largest limit first. Takes every budget and does
+ * the selecting itself, since rollover needs the previous cycle's budgets as well.
+ */
 export function budgetStatuses(
   budgets: readonly Budget[],
   categories: readonly Category[],
@@ -172,11 +201,16 @@ export function budgetStatuses(
   ctx: BaseContext,
 ): BudgetStatus[] {
   const byId = new Map(categories.map((c) => [c.id, c]))
-  return budgets
+  const previousPeriod = shiftPeriod(period.start, config, -1)
+  const previousByCategory = new Map(
+    budgetsInPeriod(budgets, previousPeriod).map((b) => [b.categoryId, b]),
+  )
+  return budgetsInPeriod(budgets, period)
     .map((b) => {
       const category = byId.get(b.categoryId)
       if (!category) return null
-      return budgetStatus(b, category, transactions, period, config, ctx)
+      const previous = previousByCategory.get(b.categoryId)
+      return budgetStatus(b, previous, category, transactions, period, config, ctx)
     })
     .filter((s): s is BudgetStatus => s !== null)
     .sort((a, b) => b.limit.minor - a.limit.minor)

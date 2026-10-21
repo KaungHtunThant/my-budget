@@ -114,7 +114,13 @@ export interface Transaction {
 export interface Budget {
   readonly id: Id
   categoryId: Id
-  /** Limit per period, in the base currency. */
+  /**
+   * ISO start of the cycle this budget plans. Each cycle has its own budgets; a budget belongs
+   * to the cycle that *contains* this date, so a change of cycle setting re-homes it rather than
+   * orphaning it. See `budgetsInPeriod`.
+   */
+  periodStart: string
+  /** Limit for its cycle, in the base currency. */
   limit: Money
   /**
    * Set when the limit was typed in a currency other than base, so reopening the budget shows
@@ -124,8 +130,10 @@ export interface Budget {
    * existed have no key for it, and pretending otherwise would be a lie the type tells.
    */
   fx?: EnteredFx | null
-  /** Carry unspent room into the next period. */
+  /** Take in the previous cycle's unspent room, when that cycle had a budget for the category. */
   rollover: boolean
+  /** Copied into each new cycle as it starts. See `services/budgets.recurringCopies`. */
+  recurring: boolean
   archived: boolean
 }
 
@@ -222,6 +230,12 @@ export interface Settings {
   appLockEnabled: boolean
   /** False until first-run onboarding completes. */
   onboardingComplete: boolean
+  /**
+   * Start of the latest cycle recurring budgets have been copied into, or null before the first
+   * copy. The marker is what makes the copy happen once per cycle: a copy the user deletes stays
+   * deleted, instead of reappearing on the next launch.
+   */
+  budgetsRolledInto: string | null
 }
 
 // ---------------------------------------------------------------------------

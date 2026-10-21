@@ -18,22 +18,26 @@ const category = (id: string, kind: CategoryKind = 'expense'): Category => ({
 const budget = (id: string, categoryId: string): Budget => ({
   id,
   categoryId,
+  periodStart: '2026-08-01',
   limit: { minor: 10000, currency: 'USD' },
   rollover: false,
+  recurring: false,
   archived: false,
 })
+
+const AUGUST = { start: '2026-08-01', end: '2026-08-31', label: 'August 2026' }
 
 describe('availableCategories', () => {
   it('offers only categories without a budget', () => {
     const categories = [category('rent'), category('food')]
     const budgets = [budget('b1', 'rent')]
-    expect(availableCategories(categories, budgets, null).map((c) => c.id)).toEqual(['food'])
+    expect(availableCategories(categories, budgets, AUGUST, null).map((c) => c.id)).toEqual(['food'])
   })
 
   it('keeps the category being edited, or its own select would show blank', () => {
     const categories = [category('rent'), category('food')]
     const budgets = [budget('b1', 'rent')]
-    expect(availableCategories(categories, budgets, 'rent').map((c) => c.id)).toEqual([
+    expect(availableCategories(categories, budgets, AUGUST, 'rent').map((c) => c.id)).toEqual([
       'rent',
       'food',
     ])
@@ -41,12 +45,18 @@ describe('availableCategories', () => {
 
   it('offers everything when no budgets exist', () => {
     const categories = [category('rent'), category('food')]
-    expect(availableCategories(categories, [], null)).toHaveLength(2)
+    expect(availableCategories(categories, [], AUGUST, null)).toHaveLength(2)
+  })
+
+  it('does not count a budget planned for another cycle', () => {
+    const categories = [category('rent'), category('food')]
+    const july = { ...budget('b1', 'rent'), periodStart: '2026-07-01' }
+    expect(availableCategories(categories, [july], AUGUST, null)).toHaveLength(2)
   })
 
   it('offers nothing once every category is budgeted', () => {
     const categories = [category('rent')]
-    expect(availableCategories(categories, [budget('b1', 'rent')], null)).toEqual([])
+    expect(availableCategories(categories, [budget('b1', 'rent')], AUGUST, null)).toEqual([])
   })
 })
 
@@ -64,6 +74,8 @@ const draft = (overrides: Partial<BudgetDraft> = {}): BudgetDraft => ({
   categoryId: 'rent',
   entry: entry(),
   rollover: false,
+  recurring: false,
+  periodStart: '2026-08-01',
   ...overrides,
 })
 
@@ -97,7 +109,16 @@ describe('buildBudget', () => {
       limit: { minor: 25000, currency: 'USD' },
       fx: null,
       rollover: false,
+      recurring: false,
+      periodStart: '2026-08-01',
       archived: false,
+    })
+  })
+
+  it('plans the cycle it was made for, and repeats only when asked', () => {
+    expect(buildBudget(draft({ periodStart: '2026-09-01', recurring: true }))).toMatchObject({
+      periodStart: '2026-09-01',
+      recurring: true,
     })
   })
 

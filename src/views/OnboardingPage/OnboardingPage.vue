@@ -133,7 +133,7 @@ async function finish(): Promise<void> {
         </p>
         <ul class="feature-list">
           <li><IonIcon :icon="checkmarkCircle" /> Log income and spending in seconds</li>
-          <li><IonIcon :icon="checkmarkCircle" /> Budgets per category, on your own cycle</li>
+          <li><IonIcon :icon="checkmarkCircle" /> A budget plan for each cycle, repeating when you want</li>
           <li><IonIcon :icon="checkmarkCircle" /> Multiple currencies, with rates you set</li>
           <li><IonIcon :icon="checkmarkCircle" /> Savings goals with progress tracking</li>
         </ul>
@@ -169,8 +169,8 @@ async function finish(): Promise<void> {
         <IonIcon :icon="calendarNumberOutline" class="pane__icon" />
         <h1 class="pane__title">Your budget cycle</h1>
         <p class="pane__lead">
-          Budgets reset every cycle. If your pay lands mid-month, anchoring the cycle to
-          payday is usually more useful than a calendar month.
+          Each cycle gets its own budgets. If your pay lands mid-month, anchoring the cycle
+          to payday is usually more useful than a calendar month.
         </p>
 
         <IonList class="pane__list" lines="full">

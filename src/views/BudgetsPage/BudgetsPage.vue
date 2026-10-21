@@ -71,6 +71,8 @@ const formFxMode = ref<FxMode>('amount')
 const formRateText = ref('')
 const formConvertedText = ref('')
 const formRollover = ref(false)
+const formRecurring = ref(false)
+const formPeriodStart = ref('')
 const pickerOpen = ref(false)
 
 const view = computed(() =>
@@ -87,9 +89,9 @@ const view = computed(() =>
   }),
 )
 
-/** Categories without a budget yet — the only sensible options when adding one. */
+/** Categories without a budget in this cycle yet — the only sensible options when adding one. */
 const availableCategories = computed(() =>
-  pickableCategories(store.expenseCategories, store.budgets, formCategoryId.value),
+  pickableCategories(store.expenseCategories, store.budgets, period.value, formCategoryId.value),
 )
 
 /**
@@ -109,6 +111,8 @@ const draft = computed<BudgetDraft>(() => ({
   categoryId: formCategoryId.value,
   entry: entry.value,
   rollover: formRollover.value,
+  recurring: formRecurring.value,
+  periodStart: formPeriodStart.value,
 }))
 
 const needsRate = computed(() => entryNeedsRate(entry.value))
@@ -125,6 +129,9 @@ function openNew(): void {
   formRateText.value = ''
   formConvertedText.value = ''
   formRollover.value = false
+  formRecurring.value = false
+  // A new budget plans the cycle on screen, which need not be the current one.
+  formPeriodStart.value = period.value.start
   modalOpen.value = true
 }
 
@@ -140,6 +147,8 @@ function openEdit(status: BudgetStatus): void {
   formRateText.value = rateTextOf(status.budget.fx)
   formConvertedText.value = convertedTextOf(status.budget.fx, status.budget.limit)
   formRollover.value = status.budget.rollover
+  formRecurring.value = status.budget.recurring
+  formPeriodStart.value = status.budget.periodStart
   modalOpen.value = true
 }
 
@@ -189,8 +198,8 @@ async function remove(): Promise<void> {
       <EmptyState
         v-if="view.statuses.length === 0"
         :icon="pieChartOutline"
-        title="No budgets set"
-        message="Set a spending limit on a category and this screen will show how much of it you have used each cycle."
+        title="No budgets for this cycle"
+        :message="`Each cycle has its own plan. Set a spending limit on a category for ${period.label} and this screen will show how much of it you have used.`"
         action-label="Add a budget"
         @action="openNew"
       />
@@ -311,14 +320,23 @@ async function remove(): Promise<void> {
               <IonToggle v-model="formRollover">
                 <IonLabel>
                   <h3>Roll over unspent</h3>
-                  <p>Add what you did not spend to next cycle's limit</p>
+                  <p>Add what last cycle's budget left unspent to this one</p>
+                </IonLabel>
+              </IonToggle>
+            </IonItem>
+            <IonItem>
+              <IonToggle v-model="formRecurring">
+                <IonLabel>
+                  <h3>Repeat every cycle</h3>
+                  <p>Copied into each new cycle as it starts. Changes here carry into later copies.</p>
                 </IonLabel>
               </IonToggle>
             </IonItem>
           </IonList>
 
           <IonNote class="modal-note">
-            Budgets are held in {{ store.base }}, and spending in another currency is counted
+            This budget plans {{ period.label }} only; editing or deleting it leaves other cycles
+            alone. Budgets are held in {{ store.base }}, and spending in another currency is counted
             against them using the rate stored with each transaction. Tap the currency to type this
             limit in another one instead — it is converted once, and stored.
           </IonNote>

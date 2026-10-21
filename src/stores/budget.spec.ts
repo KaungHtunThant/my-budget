@@ -46,7 +46,7 @@ describe('loading', () => {
       goals: store.goals.length,
     }).toMatchInlineSnapshot(`
       {
-        "budgets": 7,
+        "budgets": 28,
         "categories": 15,
         "goals": 2,
         "loading": false,
@@ -274,6 +274,47 @@ describe('writes', () => {
   })
 })
 
+describe('recurring budgets', () => {
+  const inCycle = (start: string): number =>
+    store.budgets.filter((b) => b.periodStart === start).length
+
+  it('has nothing to do while the current cycle already has its copies', async () => {
+    const before = store.budgets.length
+    await store.rollRecurringBudgets('2026-08-20')
+    expect(store.budgets.length).toBe(before)
+  })
+
+  it('copies every recurring budget into a cycle once it starts, and only once', async () => {
+    await store.rollRecurringBudgets('2026-09-02')
+    expect(inCycle('2026-09-01')).toBe(7)
+    expect(store.settings.budgetsRolledInto).toBe('2026-09-01')
+
+    await store.rollRecurringBudgets('2026-09-03')
+    expect(inCycle('2026-09-01')).toBe(7)
+  })
+
+  it('leaves a deleted copy deleted', async () => {
+    await store.rollRecurringBudgets('2026-09-02')
+    const copy = store.budgets.find((b) => b.periodStart === '2026-09-01')!
+    await store.removeBudget(copy.id)
+
+    await store.rollRecurringBudgets('2026-09-10')
+    expect(inCycle('2026-09-01')).toBe(6)
+  })
+
+  it('fills every cycle that started while the app was closed', async () => {
+    await store.rollRecurringBudgets('2026-11-05')
+    expect([inCycle('2026-09-01'), inCycle('2026-10-01'), inCycle('2026-11-01')]).toEqual([7, 7, 7])
+  })
+
+  it('never copies a one-off budget', async () => {
+    const august = store.budgets.find((b) => b.periodStart === '2026-08-01')!
+    await store.editBudget({ ...august, recurring: false })
+    await store.rollRecurringBudgets('2026-09-02')
+    expect(inCycle('2026-09-01')).toBe(6)
+  })
+})
+
 describe('onboarding', () => {
   it('resets, applies the chosen base currency and dedupes the shortlist', async () => {
     const empty = await createTestStore(false)
@@ -324,7 +365,7 @@ describe('onboarding', () => {
       goals: empty.goals.length,
     }).toMatchInlineSnapshot(`
       {
-        "budgets": 7,
+        "budgets": 28,
         "goals": 2,
         "hasTransactions": true,
         "wallets": 4,

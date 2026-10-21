@@ -25,6 +25,9 @@ const DIR = Directory.Data
 const FILE = 'my-budget-snapshot.json'
 const TEMP = 'my-budget-snapshot.tmp.json'
 const BACKUP = 'my-budget-snapshot.bak.json'
+/** Where the last snapshot of an older schema is kept once a newer build starts writing. */
+export const legacyFile = (schemaVersion: number): string =>
+  `my-budget-snapshot.v${schemaVersion}.json`
 
 export interface Snapshot extends SeedData {
   schemaVersion: number
@@ -34,6 +37,36 @@ export interface Snapshot extends SeedData {
 /** Build the payload. Kept separate from writing so export-to-share reuses it verbatim. */
 export function buildSnapshot(data: SeedData, exportedAt: string): Snapshot {
   return { schemaVersion: SCHEMA_VERSION, exportedAt, ...data }
+}
+
+async function readText(path: string): Promise<string | null> {
+  try {
+    const { data } = await Filesystem.readFile({ path, directory: DIR, encoding: Encoding.UTF8 })
+    return typeof data === 'string' ? data : await data.text()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Before a newer schema's first write replaces an older snapshot, keep that snapshot under its own
+ * name. The `.bak` rotation would lose it after two writes, and it is the last copy of the user's
+ * data in the old format — the one thing to restore from if a migration ever went wrong.
+ */
+async function keepLegacyCopy(schemaVersion: number): Promise<void> {
+  const current = await readText(FILE)
+  if (current === null) return
+  let previous: unknown
+  try {
+    previous = (JSON.parse(current) as { schemaVersion?: unknown }).schemaVersion
+  } catch {
+    return
+  }
+  if (typeof previous !== 'number' || previous >= schemaVersion) return
+
+  const path = legacyFile(previous)
+  if ((await readText(path)) !== null) return
+  await Filesystem.writeFile({ path, directory: DIR, encoding: Encoding.UTF8, data: current })
 }
 
 async function remove(path: string): Promise<void> {
@@ -52,6 +85,7 @@ async function remove(path: string): Promise<void> {
  */
 export async function writeSnapshot(snapshot: Snapshot): Promise<boolean> {
   try {
+    await keepLegacyCopy(snapshot.schemaVersion)
     await Filesystem.writeFile({
       path: TEMP,
       directory: DIR,

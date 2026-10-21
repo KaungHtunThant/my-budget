@@ -20,7 +20,8 @@ import { defineStore } from 'pinia'
 
 import type { CurrencyCode } from '@/domain/currency'
 import { type Money, zero } from '@/domain/money'
-import { type BudgetPeriodConfig, DEFAULT_PERIOD_CONFIG } from '@/domain/period'
+import { type BudgetPeriodConfig, DEFAULT_PERIOD_CONFIG, periodFor, todayIso } from '@/domain/period'
+import { recurringRoll } from '@/services/budgets'
 import { withActiveCurrency, withBaseCurrency } from '@/services/settings'
 import type {
   Budget,
@@ -54,6 +55,7 @@ export const useBudgetStore = defineStore('budget', () => {
     theme: 'system',
     appLockEnabled: false,
     onboardingComplete: false,
+    budgetsRolledInto: null,
   })
   const wallets = ref<Wallet[]>([])
   const balances = ref<Record<Id, Money>>({})
@@ -86,7 +88,28 @@ export const useBudgetStore = defineStore('budget', () => {
     if (ready.value) return
     await repo.init()
     await reload()
+    await rollRecurringBudgets(todayIso())
     ready.value = true
+  }
+
+  /**
+   * Copy recurring budgets into every cycle that has started since the last copy. Runs at launch,
+   * when the app returns to the foreground, and after the cycle setting changes; at most once per
+   * cycle, because the marker moves even when there was nothing to copy — so a copy the user
+   * deletes stays deleted. Safe to interrupt: a re-run skips what already exists.
+   */
+  async function rollRecurringBudgets(today: string): Promise<void> {
+    if (!settings.value.onboardingComplete) return
+    const roll = recurringRoll(
+      budgets.value,
+      settings.value.budgetsRolledInto,
+      today,
+      periodConfig.value,
+    )
+    if (!roll) return
+    for (const copy of roll.copies) await repo.createBudget(copy)
+    await saveSettings({ budgetsRolledInto: roll.rolledInto })
+    await reload()
   }
 
   async function reload(): Promise<void> {
@@ -149,6 +172,8 @@ export const useBudgetStore = defineStore('budget', () => {
       ...withBaseCurrency(settings.value, input.baseCurrency),
       budgetPeriod: input.budgetPeriod,
       onboardingComplete: true,
+      // The demo's budgets already cover this cycle; real copying starts from the next one.
+      budgetsRolledInto: periodFor(todayIso(), input.budgetPeriod).start,
     })
     await reload()
   }
@@ -321,6 +346,7 @@ export const useBudgetStore = defineStore('budget', () => {
     // actions
     init,
     reload,
+    rollRecurringBudgets,
     flushSnapshot,
     saveSettings,
     completeOnboarding,

@@ -155,20 +155,22 @@ exposes it. Flag if hierarchy should be built or dropped from the model.*
 
 ## 7. Budgets
 
-*A spending limit per category, per cycle.*
+*A spending limit per category, per cycle. Since 2.0.0 every cycle has its own plan.*
 
 | ID | Function point | Status |
 |---|---|---|
-| 7.1 | Set a limit on a category for the cycle | Built |
+| 7.1 | Set a limit on a category for one cycle — the one on screen, past, current or future | Built |
 | 7.2 | Budgeted, spent and remaining totals across all budgets | Built |
 | 7.3 | Per-category progress bar with spent-of-limit figures | Built |
 | 7.4 | Pace marker showing whether spending is ahead of the cycle's elapsed time | Built |
 | 7.5 | Over-limit budgets highlighted and counted | Built |
-| 7.6 | Roll unspent room into the next cycle, optional per budget | Built |
+| 7.6 | Take in what the previous cycle's budget for the category left unspent, optional per budget | Built |
 | 7.7 | Rolled-over amount shown explicitly on the row that received it | Built |
-| 7.8 | Browse budgets for past and future cycles | Built |
+| 7.8 | Browse each cycle's own budgets, past and future | Built |
 | 7.9 | Edit or delete a budget | Built |
 | 7.10 | A limit typed in another currency can be given as its base-currency amount instead of a rate | Built |
+| 7.11 | Each cycle has its own budgets: editing or deleting one leaves every other cycle alone | Built |
+| 7.12 | Mark a budget "Repeat every cycle" and it is copied into each new cycle as it starts — including cycles that began while the app was closed — unless that cycle already has one for the category. Off by default | Built |
 
 **Depends on:** categories (§6), transactions (§5), the cycle setting (1.4 / 14.3). Limits are
 held in the main currency; spending in another currency is converted using each transaction's

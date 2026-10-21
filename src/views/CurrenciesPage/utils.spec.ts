@@ -20,6 +20,7 @@ const settings = (overrides: Partial<Settings> = {}): Settings => ({
   theme: 'system',
   appLockEnabled: false,
   onboardingComplete: true,
+  budgetsRolledInto: null,
   ...overrides,
 })
 

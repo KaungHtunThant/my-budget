@@ -3,7 +3,7 @@
  */
 
 import type { BaseContext } from '@/domain/budgeting'
-import { budgetStatuses, budgetTotals } from '@/domain/budgeting'
+import { budgetStatuses, budgetTotals, budgetsInPeriod } from '@/domain/budgeting'
 import type { CurrencyCode } from '@/domain/currency'
 import type { BudgetPeriodConfig, Period } from '@/domain/period'
 import { type AmountEntry, entryIsComplete, resolveEntry } from '@/services/fx'
@@ -11,7 +11,8 @@ import { currentPace } from '@/services/period'
 import type { Budget, BudgetStatus, Category, Id, NewBudget, Transaction } from '@/domain/types'
 
 /**
- * Expense categories that do not have a budget yet.
+ * Expense categories that do not have a budget in `period` yet. Each cycle has its own plan, so a
+ * budget in another cycle does not use a category up.
  *
  * The category currently being edited is kept in the list, or its own select would show blank
  * while editing it.
@@ -19,9 +20,10 @@ import type { Budget, BudgetStatus, Category, Id, NewBudget, Transaction } from 
 export function availableCategories(
   categories: readonly Category[],
   budgets: readonly Budget[],
+  period: Period,
   editingCategoryId: Id | null,
 ): Category[] {
-  const used = new Set(budgets.map((b) => b.categoryId))
+  const used = new Set(budgetsInPeriod(budgets, period).map((b) => b.categoryId))
   return categories.filter((c) => !used.has(c.id) || c.id === editingCategoryId)
 }
 
@@ -34,6 +36,10 @@ export interface BudgetDraft {
    */
   entry: AmountEntry
   rollover: boolean
+  /** Copy this budget into each new cycle as it starts. */
+  recurring: boolean
+  /** Start of the cycle the budget plans: the selected one for a new budget, its own on edit. */
+  periodStart: string
 }
 
 /**
@@ -60,6 +66,8 @@ export function buildBudget(draft: BudgetDraft): NewBudget | null {
     limit: resolved.amount,
     fx: resolved.fx,
     rollover: draft.rollover,
+    recurring: draft.recurring,
+    periodStart: draft.periodStart,
     archived: false,
   }
 }

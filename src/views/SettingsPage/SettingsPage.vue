@@ -94,6 +94,8 @@ function openPeriodModal(): void {
 
 async function savePeriod(): Promise<void> {
   await store.saveSettings({ budgetPeriod: draftPeriodConfig.value })
+  // A new cycle shape can put "today" in a cycle that has not had its recurring copies yet.
+  await store.rollRecurringBudgets(todayIso())
   store.goToCurrentPeriod()
   periodModalOpen.value = false
 }

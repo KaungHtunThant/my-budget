@@ -102,10 +102,29 @@ describe('snapshot file', () => {
       disk.set(FILE, JSON.stringify(future))
 
       expect(await readSnapshot()).toBeNull()
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('schema v2'))
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining(`schema v${SCHEMA_VERSION + 1}`))
     } finally {
       warn.mockRestore()
     }
+  })
+
+  it('keeps an older schema’s snapshot under its own name before the first newer write', async () => {
+    const old = JSON.stringify({ ...buildSnapshot(buildSeed({}), 'old'), schemaVersion: 1 })
+    disk.set(FILE, old)
+
+    await writeSnapshot(buildSnapshot(buildSeed({}), 'new'))
+    await writeSnapshot(buildSnapshot(buildSeed({}), 'newer'))
+    await writeSnapshot(buildSnapshot(buildSeed({}), 'newest'))
+
+    // Two rotations would have pushed it out of `.bak`; the named copy keeps it.
+    expect(disk.get('my-budget-snapshot.v1.json')).toBe(old)
+    expect(JSON.parse(disk.get(BACKUP)!).exportedAt).toBe('newer')
+  })
+
+  it('writes no legacy copy when the snapshot on disk is already current', async () => {
+    await writeSnapshot(buildSnapshot(buildSeed({}), 'one'))
+    await writeSnapshot(buildSnapshot(buildSeed({}), 'two'))
+    expect([...disk.keys()].filter((k) => /\.v\d+\.json$/.test(k))).toEqual([])
   })
 
   it('returns null when nothing has been written', async () => {
@@ -204,6 +223,39 @@ describe('rebuilding from a snapshot', () => {
       })
     } finally {
       await second.destroy()
+    }
+  })
+
+  it('carries a schema-1 snapshot forward when rebuilding from it', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-08-20T12:00:00'))
+    try {
+      const { settings, ...rest } = buildSeed({})
+      const { budgetsRolledInto: _dropped, ...settingsV1 } = settings
+      disk.set(
+        FILE,
+        JSON.stringify({
+          ...rest,
+          settings: { ...settingsV1, onboardingComplete: true },
+          schemaVersion: 1,
+          exportedAt: 'then',
+          budgets: [
+            { id: 'bdg_food', categoryId: 'cat_seed_5', limit: { minor: 40000, currency: 'USD' }, rollover: false, archived: false },
+          ],
+        }),
+      )
+
+      const repo = new IndexedDbRepository({ name: `snapshot-${dbCounter++}` })
+      await repo.init()
+      try {
+        const [budget] = await repo.listBudgets()
+        expect(budget).toMatchObject({ id: 'bdg_food', periodStart: '2026-08-01', recurring: true })
+        expect((await repo.getSettings()).budgetsRolledInto).toBe('2026-08-01')
+      } finally {
+        await repo.destroy()
+      }
+    } finally {
+      vi.useRealTimers()
     }
   })
 
