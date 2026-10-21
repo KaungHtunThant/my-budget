@@ -149,6 +149,16 @@ ion-item ion-label p {
   gap: 12px;
 }
 
+/*
+ * Room for the on-screen keyboard. Ionic's own --keyboard-offset is only ever set by input shims
+ * that never start in the Android app, so App.vue publishes how much of the keyboard covers the
+ * view and every ion-content adds it to its bottom padding — the space a field near the bottom of
+ * a form is scrolled up into.
+ */
+ion-content {
+  --keyboard-offset: var(--app-keyboard-covered, 0px);
+}
+
 .app-content {
   --padding-start: 14px;
   --padding-end: 14px;

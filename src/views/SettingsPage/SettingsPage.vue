@@ -270,6 +270,7 @@ async function resetEmpty(): Promise<void> {
         :is-open="periodModalOpen"
         :initial-breakpoint="0.85"
         :breakpoints="[0, 0.85]"
+        :expand-to-scroll="false"
         @did-dismiss="periodModalOpen = false"
       >
         <IonHeader>

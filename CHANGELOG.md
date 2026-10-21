@@ -89,6 +89,15 @@ All notable changes to this project are recorded here. The format follows
 
 ### Fixed
 
+- **The on-screen keyboard no longer covers the field being typed in.** On Android nothing was
+  scrolling a field near the bottom of a form into view — Ionic's input shims never start in the
+  app, and with edge-to-edge enforced the window does not shrink for the keyboard — so the note,
+  the conversion card and the last fields of the recurring and goal forms sat underneath it. The
+  app now listens to the keyboard plugin: every page and form gains bottom padding equal to the
+  part of the keyboard actually over the view (none, on a phone that does shrink the window), and
+  the focused field is scrolled up to sit 24px above the keyboard, including when moving between
+  fields with it already open. The "Add to goal" and budget-cycle sheets now scroll inside the
+  visible part of the sheet instead of running off the bottom of the screen.
 - Editing an income transaction no longer silently clears its category. The type watcher ran
   after the form loaded and wiped any category that had been set, because loading an income
   row moves `type` off its `expense` default.

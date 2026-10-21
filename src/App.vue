@@ -3,8 +3,11 @@ import { watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { IonApp, IonRouterOutlet, toastController, useBackButton, useIonRouter } from '@ionic/vue'
 import { App as CapacitorApp } from '@capacitor/app'
+import { Capacitor } from '@capacitor/core'
+import { Keyboard } from '@capacitor/keyboard'
 import { useBudgetStore } from '@/stores/budget'
 import { EXIT_WINDOW_MS, backAction } from '@/router/back'
+import { coveredHeight, revealDelta } from '@/shell/keyboard'
 
 const store = useBudgetStore()
 const route = useRoute()
@@ -73,6 +76,51 @@ useBackButton(10, async () => {
 void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
   if (!isActive) void store.flushSnapshot()
 })
+
+/**
+ * Keep the focused field above the on-screen keyboard. Nothing else does on Android (see
+ * `shell/keyboard.ts`), so: publish how much of the keyboard covers the view as
+ * `--app-keyboard-covered`, which `ion-content` adds to its bottom padding to make room, then
+ * scroll the field up into that room. Native only — a browser handles its own keyboard.
+ */
+if (Capacitor.isNativePlatform()) {
+  let heightBefore: number | null = null
+  let covered = 0
+
+  const setCovered = (px: number): void => {
+    covered = px
+    document.documentElement.style.setProperty('--app-keyboard-covered', `${px}px`)
+  }
+
+  const reveal = (target: EventTarget | null): void => {
+    if (!(target instanceof HTMLElement)) return
+    const content = target.closest('ion-content')
+    if (!content) return
+    // The whole item, so a stacked label stays in view with its input.
+    const field = target.closest('ion-item') ?? target
+    const delta = revealDelta(field.getBoundingClientRect().bottom, window.innerHeight, covered)
+    if (delta > 0) void content.scrollByPoint(0, delta, 200)
+  }
+
+  // Measured before the keyboard opens, so a window that does shrink for it is not padded twice.
+  void Keyboard.addListener('keyboardWillShow', () => {
+    heightBefore ??= window.innerHeight
+  })
+  void Keyboard.addListener('keyboardDidShow', ({ keyboardHeight }) => {
+    const now = window.innerHeight
+    setCovered(coveredHeight(keyboardHeight, heightBefore ?? now, now))
+    // A frame for the new padding to lay out, or there is nothing yet to scroll into.
+    requestAnimationFrame(() => reveal(document.activeElement))
+  })
+  void Keyboard.addListener('keyboardWillHide', () => {
+    heightBefore = null
+    setCovered(0)
+  })
+  // Moving to another field with the keyboard already up fires no keyboard event.
+  document.addEventListener('focusin', (event) => {
+    if (covered > 0) requestAnimationFrame(() => reveal(event.target))
+  })
+}
 
 /**
  * Apply the theme preference. "system" follows the OS, so we listen to the media query

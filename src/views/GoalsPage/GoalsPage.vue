@@ -318,6 +318,7 @@ async function contribute(): Promise<void> {
         :is-open="contributeOpen"
         :initial-breakpoint="0.5"
         :breakpoints="[0, 0.5]"
+        :expand-to-scroll="false"
         @did-dismiss="contributeOpen = false"
       >
         <IonHeader>
