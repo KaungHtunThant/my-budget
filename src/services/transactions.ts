@@ -10,8 +10,8 @@
  */
 
 import type { CurrencyCode } from '@/domain/currency'
-import { convert, impliedRate } from '@/domain/fx'
-import { type Money, parseMoney } from '@/domain/money'
+import { impliedRate } from '@/domain/fx'
+import { type Money, parseMoney, toDecimalString } from '@/domain/money'
 import type {
   EnteredFx,
   Id,
@@ -21,7 +21,14 @@ import type {
   Wallet,
 } from '@/domain/types'
 
-import { type AmountEntry, entryNeedsRate, parseRate, rateTextOf, resolveEntry } from './fx'
+import {
+  type AmountEntry,
+  type FxMode,
+  entryNeedsRate,
+  rateTextOf,
+  resolveConversion,
+  resolveEntry,
+} from './fx'
 
 /** The entry form's state, exactly as the user has it. */
 export interface TransactionDraft {
@@ -33,7 +40,11 @@ export interface TransactionDraft {
   categoryId: Id | null
   amountText: string
   entryCurrency: CurrencyCode
+  /** Which conversion field is in use: the wallet-side amount, or the rate. */
+  fxMode: FxMode
   rateText: string
+  /** The amount in the receiving wallet's currency, as typed. */
+  convertedText: string
   date: string
   note: string
   recurringRuleId: Id | null
@@ -79,7 +90,9 @@ function amountEntry(draft: TransactionDraft, wallets: readonly Wallet[]): Amoun
     amountText: draft.amountText,
     entryCurrency: draft.entryCurrency,
     targetCurrency: walletCurrency(draft, wallets),
+    fxMode: draft.fxMode,
     rateText: draft.rateText,
+    convertedText: draft.convertedText,
   }
 }
 
@@ -129,15 +142,17 @@ export function resolveDraft(
   const entered = parseMoney(draft.amountText, walletCurrency(draft, wallets))
   if (entered === null) return null
 
-  const needs = needsRate(draft, wallets)
-  const rate = parseRate(draft.rateText)
-  const toAmount = !needs
-    ? entered
-    : rate === null
-      ? null
-      : convert(entered, rateTo(draft, wallets), rate)
-
-  return { entered, amount: entered, toAmount, fx: null, rateOk: !needs || rate !== null }
+  if (!needsRate(draft, wallets)) {
+    return { entered, amount: entered, toAmount: entered, fx: null, rateOk: true }
+  }
+  const conversion = resolveConversion(entered, rateTo(draft, wallets), draft)
+  return {
+    entered,
+    amount: entered,
+    toAmount: conversion?.amount ?? null,
+    fx: null,
+    rateOk: conversion !== null,
+  }
 }
 
 /** Whether the form is complete enough to save. */
@@ -199,6 +214,19 @@ export function rateTextFor(tx: Transaction): string {
   if (tx.fx) return rateTextOf(tx.fx)
   if (tx.type === 'transfer' && tx.toAmount && tx.toAmount.currency !== tx.amount.currency) {
     return String(impliedRate(tx.amount, tx.toAmount))
+  }
+  return ''
+}
+
+/**
+ * The converted-amount field's text when an existing transaction is opened for editing: what the
+ * wallet actually stored — `amount` for an entry with a snapshot, `toAmount` for a cross-currency
+ * transfer. Both are exact, so this needs none of `rateTextFor`'s care.
+ */
+export function convertedTextFor(tx: Transaction): string {
+  if (tx.fx) return toDecimalString(tx.amount)
+  if (tx.type === 'transfer' && tx.toAmount && tx.toAmount.currency !== tx.amount.currency) {
+    return toDecimalString(tx.toAmount)
   }
   return ''
 }

@@ -47,6 +47,15 @@ All notable changes to this project are recorded here. The format follows
   onboarding the first press shows "Press back again to exit" and a second press within two
   seconds closes the app. The parents live on the routes as `meta.parent`; the decision is one
   pure function, `router/back.backAction`.
+- **A conversion can be given as the amount on the other side, not just as a rate.** Pay 100,000
+  VND from an AED wallet and the form now asks first for what the statement says — "AED deducted
+  from Cash" — and works the rate out from it, showing it both ways round before you save. The
+  rate box is still one tap away on the same card. It applies everywhere the card appears:
+  expense, income and transfer (where it is the amount received), recurring bills and budget
+  limits. Nothing new is stored — the record still holds the wallet amount and a frozen rate, and
+  the implied rate reproduces the typed amount to the minor unit at every pair of precisions, so
+  reopening and saving an untouched form changes nothing. Changing the wallet to one in another
+  currency now clears the conversion rather than storing the old figure under the new code.
 
 ### Changed
 

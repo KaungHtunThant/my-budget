@@ -124,6 +124,7 @@ recurring rule — all of them name a wallet. This module cannot be removed.
 | 5.10 | The rate used is stored on the transaction and never re-valued when rates change later | Built |
 | 5.11 | Cross-currency transfers credit the destination wallet with its own converted amount | Built |
 | 5.12 | Edit or delete an existing transaction | Built |
+| 5.13 | Give a conversion as the amount that left or reached the wallet ("AED deducted from Cash"), with the rate worked out from it; the default, with typing the rate still a tap away | Built |
 
 **Depends on:** wallets (§3), categories (§6) for 5.1–5.2, exchange rates (§13) for 5.7–5.11.
 **Removing 5.7–5.11 removes multi-currency entry** but leaves multi-currency wallets (3.4)
@@ -167,6 +168,7 @@ exposes it. Flag if hierarchy should be built or dropped from the model.*
 | 7.7 | Rolled-over amount shown explicitly on the row that received it | Built |
 | 7.8 | Browse budgets for past and future cycles | Built |
 | 7.9 | Edit or delete a budget | Built |
+| 7.10 | A limit typed in another currency can be given as its base-currency amount instead of a rate | Built |
 
 **Depends on:** categories (§6), transactions (§5), the cycle setting (1.4 / 14.3). Limits are
 held in the main currency; spending in another currency is converted using each transaction's
@@ -257,6 +259,7 @@ Budgets (§7) already express the plan for a cycle, and goals (§10) take contri
 | 11.7 | "Add now" — record one occurrence immediately | Built |
 | 11.8 | Swipe a row for quick actions | Built |
 | 11.9 | Edit or delete a rule | Built |
+| 11.11 | A rule typed in another currency can be given as what each payment comes to in the wallet's currency instead of a rate | Built |
 | 11.10 | Generate transactions automatically when a rule falls due | Planned |
 
 **Depends on:** wallets (§3), categories (§6). 11.10 needs persistence and a launch-time check —

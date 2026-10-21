@@ -7,8 +7,8 @@
  */
 
 import type { CurrencyCode } from '@/domain/currency'
-import { convert, isValidRate } from '@/domain/fx'
-import { type Money, parseMoney } from '@/domain/money'
+import { convert, impliedRate, isValidRate } from '@/domain/fx'
+import { type Money, parseMoney, toDecimalString } from '@/domain/money'
 import type { EnteredFx, Settings, Wallet } from '@/domain/types'
 
 /**
@@ -52,13 +52,51 @@ export function parseRate(text: string): number | null {
 // ---------------------------------------------------------------------------
 
 /**
+ * Which side of a conversion the user types. Usually they know what actually left or reached the
+ * wallet — the bank statement says AED 14.50, not "0.000145" — so `amount` takes that figure and
+ * the rate is worked out from it; `rate` is the original typed-rate entry.
+ */
+export type FxMode = 'amount' | 'rate'
+
+/** The conversion half of a form, as typed. Only the field `fxMode` names is read. */
+export interface ConversionInput {
+  fxMode: FxMode
+  /** The rate as typed: 1 entered unit = this many target units. */
+  rateText: string
+  /** The amount in the target currency as typed. */
+  convertedText: string
+}
+
+/**
+ * What an entered amount becomes in `target`, and the rate that takes it there. Null while the
+ * active field is blank, unparseable, or not positive.
+ *
+ * In `amount` mode the typed money is stored as-is and the rate is implied from the pair, so the
+ * record holds exactly what the user saw on their statement. `convert(entered, target, rate)`
+ * reproduces it exactly — the implied rate's rounding error is far below half a minor unit.
+ */
+export function resolveConversion(
+  entered: Money,
+  target: CurrencyCode,
+  input: ConversionInput,
+): { amount: Money; rate: number } | null {
+  if (input.fxMode === 'amount') {
+    const amount = parseMoney(input.convertedText, target)
+    if (amount === null || amount.minor <= 0 || entered.minor <= 0) return null
+    return { amount, rate: impliedRate(entered, amount) }
+  }
+  const rate = parseRate(input.rateText)
+  return rate === null ? null : { amount: convert(entered, target, rate), rate }
+}
+
+/**
  * One amount as the user has it in a form, plus the currency the record must end up in.
  *
  * Text rather than `Money`, for the same reason `TransactionDraft` is: parsing is where the bugs
  * live — a comma decimal mark, a half-typed rate, a currency changed after the rate was entered —
  * and text-in / record-out makes each of those a plain unit test.
  */
-export interface AmountEntry {
+export interface AmountEntry extends ConversionInput {
   amountText: string
   /** Currency the amount was typed in. */
   entryCurrency: CurrencyCode
@@ -67,8 +105,6 @@ export interface AmountEntry {
    * budget limit. A record is never stored in the currency it happened to be typed in.
    */
   targetCurrency: CurrencyCode
-  /** The rate as typed. Ignored when the two currencies match. */
-  rateText: string
 }
 
 export interface ResolvedEntry {
@@ -100,13 +136,13 @@ export function resolveEntry(entry: AmountEntry): ResolvedEntry | null {
 
   if (!entryNeedsRate(entry)) return { entered, amount: entered, fx: null, rateOk: true }
 
-  const rate = parseRate(entry.rateText)
-  if (rate === null) return { entered, amount: null, fx: null, rateOk: false }
+  const conversion = resolveConversion(entered, entry.targetCurrency, entry)
+  if (conversion === null) return { entered, amount: null, fx: null, rateOk: false }
 
   return {
     entered,
-    amount: convert(entered, entry.targetCurrency, rate),
-    fx: { enteredAmount: entered, rate },
+    amount: conversion.amount,
+    fx: { enteredAmount: entered, rate: conversion.rate },
     rateOk: true,
   }
 }
@@ -129,4 +165,12 @@ export function entryIsComplete(entry: AmountEntry): boolean {
  */
 export function rateTextOf(fx: EnteredFx | null | undefined): string {
   return fx ? String(fx.rate) : ''
+}
+
+/**
+ * The converted-amount field's text when an existing record is opened for editing: the stored
+ * amount itself, which is exact, so saving again unchanged writes the same record.
+ */
+export function convertedTextOf(fx: EnteredFx | null | undefined, amount: Money): string {
+  return fx ? toDecimalString(amount) : ''
 }

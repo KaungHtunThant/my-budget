@@ -43,10 +43,12 @@ import { amountPlaceholder } from '@/domain/format'
 import { toDecimalString } from '@/domain/money'
 import { todayIso } from '@/domain/period'
 import type { Id, Transaction, TransactionType } from '@/domain/types'
+import type { FxMode } from '@/services/fx'
 import {
   type TransactionDraft,
   buildTransaction,
   canSaveDraft,
+  convertedTextFor,
   needsRate as entryNeedsRate,
   rateFrom as rateFromOf,
   rateTextFor,
@@ -55,6 +57,7 @@ import {
   walletCurrency as walletCurrencyOf,
 } from '@/services/transactions'
 import { useBudgetStore } from '@/stores/budget'
+import { convertedLabel, missingConversionMessage } from './utils'
 
 const props = defineProps<{
   /** Existing transaction to edit, or null to create a new one. */
@@ -73,7 +76,9 @@ const toWalletId = ref<Id | null>(null)
 const categoryId = ref<Id | null>(null)
 const amountText = ref('')
 const entryCurrency = ref<CurrencyCode>(store.base)
+const fxMode = ref<FxMode>('amount')
 const rateText = ref('')
+const convertedText = ref('')
 const date = ref(todayIso())
 const note = ref('')
 const saving = ref(false)
@@ -94,7 +99,9 @@ const draft = computed<TransactionDraft>(() => ({
   categoryId: categoryId.value,
   amountText: amountText.value,
   entryCurrency: entryCurrency.value,
+  fxMode: fxMode.value,
   rateText: rateText.value,
+  convertedText: convertedText.value,
   date: date.value,
   note: note.value,
   recurringRuleId: props.transaction?.recurringRuleId ?? null,
@@ -121,11 +128,31 @@ const enteredMoney = computed(() => resolved.value?.entered ?? null)
 const resolvedAmount = computed(() => resolved.value?.amount ?? null)
 const resolvedToAmount = computed(() => resolved.value?.toAmount ?? null)
 
+const amountLabel = computed(() =>
+  convertedLabel(
+    type.value,
+    rateTo.value,
+    walletId.value ? (store.walletsById.get(walletId.value)?.name ?? null) : null,
+    toWalletId.value ? (store.walletsById.get(toWalletId.value)?.name ?? null) : null,
+  ),
+)
+
 const canSave = computed(() => canSaveDraft(draft.value, store.wallets))
 
 // Default the entry currency to the wallet's, which is right the vast majority of the time.
 watch(walletId, () => {
   if (!editing.value) entryCurrency.value = walletCurrency.value
+})
+
+// A conversion is typed *into* one currency. When the receiving wallet changes to one holding
+// another, the old figure would be stored under the new currency's code, so it is dropped.
+// `convertedFor` is what the current text was typed against; `load()` sets it.
+let convertedFor: CurrencyCode = rateTo.value
+watch(rateTo, (target) => {
+  if (target === convertedFor) return
+  convertedFor = target
+  convertedText.value = ''
+  rateText.value = ''
 })
 
 watch(type, () => {
@@ -153,18 +180,23 @@ function load(): void {
       entryCurrency.value = tx.amount.currency
       amountText.value = toDecimalString(tx.amount)
     }
+    fxMode.value = 'amount'
     rateText.value = rateTextFor(tx)
+    convertedText.value = convertedTextFor(tx)
   } else {
     type.value = props.initialType ?? 'expense'
     walletId.value = store.wallets[0]?.id ?? null
     entryCurrency.value = walletCurrency.value
     amountText.value = ''
+    fxMode.value = 'amount'
     rateText.value = ''
+    convertedText.value = ''
     categoryId.value = null
     toWalletId.value = null
     date.value = todayIso()
     note.value = ''
   }
+  convertedFor = rateTo.value
   error.value = ''
 }
 
@@ -173,15 +205,18 @@ load()
 function pickCurrency(code: CurrencyCode): void {
   entryCurrency.value = code
   pickerOpen.value = false
-  // A fresh currency needs a fresh rate; a stale one would be silently wrong.
-  if (code !== walletCurrency.value) rateText.value = ''
+  // A fresh currency needs a fresh conversion; a stale one would be silently wrong.
+  if (code !== walletCurrency.value) {
+    rateText.value = ''
+    convertedText.value = ''
+  }
 }
 
 async function save(): Promise<void> {
   // The rate check comes first: a missing rate is the more specific complaint, and asking for an
   // amount that has already been entered sends the user looking in the wrong field.
   if (needsRate.value && !rateValid.value) {
-    error.value = 'Enter the exchange rate you used.'
+    error.value = missingConversionMessage(fxMode.value, rateTo.value)
     return
   }
 
@@ -318,12 +353,15 @@ async function remove(): Promise<void> {
     <FxRateField
       v-if="needsRate"
       v-model="rateText"
+      v-model:converted-text="convertedText"
+      v-model:mode="fxMode"
       :from="rateFrom"
       :to="rateTo"
       :entered="enteredMoney"
       :converted="type === 'transfer' ? resolvedToAmount : resolvedAmount"
-      lead="This crosses currencies, so enter the rate you actually got. It is stored with the
-        transaction and never updated later."
+      :amount-label="amountLabel"
+      lead="This crosses currencies. Enter what actually came out the other side, or the rate you
+        got — it is stored with the transaction and never updated later."
     />
 
     <IonText v-if="error" color="danger" class="error">{{ error }}</IonText>

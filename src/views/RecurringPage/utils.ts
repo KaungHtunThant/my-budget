@@ -92,6 +92,19 @@ export function monthlyCommitment(
 }
 
 /**
+ * The label on the converted-amount field: what each payment comes to in the wallet's currency,
+ * and which way it moves.
+ */
+export function convertedLabel(
+  type: TransactionType,
+  currency: CurrencyCode,
+  walletName: string | null,
+): string {
+  const verb = type === 'income' ? 'paid into' : 'charged to'
+  return walletName ? `${currency} ${verb} ${walletName}` : `${currency} per payment`
+}
+
+/**
  * A rule in words: when it happens, and out of which wallet.
  *
  * Written from the rule rather than the form so the list reads correctly for rules created on

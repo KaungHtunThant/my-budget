@@ -45,7 +45,14 @@ import { amountPlaceholder } from '@/domain/format'
 import { toDecimalString } from '@/domain/money'
 import { WEEKDAY_NAMES, todayIso } from '@/domain/period'
 import type { Id, RecurrenceFrequency, RecurringRule, TransactionType } from '@/domain/types'
-import { type AmountEntry, entryNeedsRate, rateTextOf, resolveEntry } from '@/services/fx'
+import {
+  type AmountEntry,
+  type FxMode,
+  convertedTextOf,
+  entryNeedsRate,
+  rateTextOf,
+  resolveEntry,
+} from '@/services/fx'
 import { transactionFromRule } from '@/services/recurring'
 import { useBudgetStore } from '@/stores/budget'
 
@@ -53,6 +60,7 @@ import {
   type RuleDraft,
   buildRule,
   canSaveRule,
+  convertedLabel,
   describeRule,
   monthlyCommitment,
   usesWeekday as anchoredToWeekday,
@@ -67,7 +75,9 @@ const name = ref('')
 const type = ref<TransactionType>('expense')
 const amountText = ref('')
 const entryCurrency = ref<CurrencyCode>(store.base)
+const fxMode = ref<FxMode>('amount')
 const rateText = ref('')
+const convertedText = ref('')
 const walletId = ref<Id | null>(null)
 const categoryId = ref<Id | null>(null)
 const frequency = ref<RecurrenceFrequency>('monthly')
@@ -99,7 +109,9 @@ const entry = computed<AmountEntry>(() => ({
   amountText: amountText.value,
   entryCurrency: entryCurrency.value,
   targetCurrency: walletCurrency.value,
+  fxMode: fxMode.value,
   rateText: rateText.value,
+  convertedText: convertedText.value,
 }))
 
 const draft = computed<RuleDraft>(() => ({
@@ -117,6 +129,14 @@ const draft = computed<RuleDraft>(() => ({
 
 const needsRate = computed(() => entryNeedsRate(entry.value))
 const resolved = computed(() => resolveEntry(entry.value))
+
+const amountLabel = computed(() =>
+  convertedLabel(
+    type.value,
+    walletCurrency.value,
+    walletId.value === null ? null : (store.walletsById.get(walletId.value)?.name ?? null),
+  ),
+)
 
 const canSave = computed(() => canSaveRule(draft.value))
 
@@ -139,7 +159,10 @@ function openNew(): void {
   walletId.value = store.wallets[0]?.id ?? null
   // After the wallet, so it picks up that wallet's currency rather than the previous one's.
   entryCurrency.value = walletCurrency.value
+  fxMode.value = 'amount'
   rateText.value = ''
+  convertedText.value = ''
+  convertedFor = walletCurrency.value
   categoryId.value = store.expenseCategories[0]?.id ?? null
   frequency.value = 'monthly'
   dayOfMonth.value = 1
@@ -157,7 +180,10 @@ function openEdit(rule: RecurringRule): void {
   // so re-saving an untouched form cannot rewrite the stored amount at a different rate.
   amountText.value = toDecimalString(rule.fx?.enteredAmount ?? rule.amount)
   entryCurrency.value = (rule.fx?.enteredAmount ?? rule.amount).currency
+  fxMode.value = 'amount'
   rateText.value = rateTextOf(rule.fx)
+  convertedText.value = convertedTextOf(rule.fx, rule.amount)
+  convertedFor = walletCurrency.value
   categoryId.value = rule.categoryId
   frequency.value = rule.frequency
   dayOfMonth.value = rule.dayOfMonth ?? 1
@@ -169,8 +195,11 @@ function openEdit(rule: RecurringRule): void {
 function pickCurrency(code: CurrencyCode): void {
   entryCurrency.value = code
   pickerOpen.value = false
-  // A fresh currency needs a fresh rate; a stale one would be silently wrong.
-  if (code !== walletCurrency.value) rateText.value = ''
+  // A fresh currency needs a fresh conversion; a stale one would be silently wrong.
+  if (code !== walletCurrency.value) {
+    rateText.value = ''
+    convertedText.value = ''
+  }
 }
 
 async function save(): Promise<void> {
@@ -189,6 +218,17 @@ async function save(): Promise<void> {
 // Default the amount's currency to the wallet's, which is right the vast majority of the time.
 watch(walletId, () => {
   if (editingId.value === null) entryCurrency.value = walletCurrency.value
+})
+
+// A conversion is typed *into* the wallet's currency. Moving the rule to a wallet holding another
+// would store the old figure under the new currency's code, so it is dropped. `convertedFor` is
+// the currency the current text was typed against; opening the form sets it.
+let convertedFor: CurrencyCode = walletCurrency.value
+watch(walletCurrency, (target) => {
+  if (target === convertedFor) return
+  convertedFor = target
+  rateText.value = ''
+  convertedText.value = ''
 })
 
 async function remove(id: Id): Promise<void> {
@@ -372,12 +412,16 @@ async function addNow(rule: RecurringRule): Promise<void> {
           <FxRateField
             v-if="needsRate"
             v-model="rateText"
+            v-model:converted-text="convertedText"
+            v-model:mode="fxMode"
             :from="entryCurrency"
             :to="walletCurrency"
             :entered="resolved?.entered ?? null"
             :converted="resolved?.amount ?? null"
-            lead="The wallet holds another currency, so enter the rate you are using. It is stored
-              with the rule and applied to every entry it generates."
+            :amount-label="amountLabel"
+            lead="The wallet holds another currency, so enter what each payment comes to there, or
+              the rate you are using. It is stored with the rule and applied to every entry it
+              generates."
           />
 
           <IonButton

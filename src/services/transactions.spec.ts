@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import type { CurrencyCode } from '@/domain/currency'
 import { impliedRate } from '@/domain/fx'
-import type { Transaction, Wallet } from '@/domain/types'
+import type { EnteredFx, Transaction, Wallet } from '@/domain/types'
 
 import {
   type TransactionDraft,
   buildTransaction,
   canSaveDraft,
+  convertedTextFor,
   needsRate,
   rateFrom,
   rateTextFor,
@@ -38,7 +39,9 @@ const draft = (overrides: Partial<TransactionDraft> = {}): TransactionDraft => (
   categoryId: 'cat_1',
   amountText: '100',
   entryCurrency: 'USD',
+  fxMode: 'rate',
   rateText: '',
+  convertedText: '',
   date: '2026-08-20',
   note: '',
   recurringRuleId: null,
@@ -356,5 +359,100 @@ describe('rateTextFor', () => {
     const resaved = buildTransaction(reopened, WALLETS)
     expect(resaved!.amount).toEqual(stored.amount)
     expect(resaved!.toAmount).toEqual(stored.toAmount)
+  })
+})
+
+describe('amount mode', () => {
+  const tx = (overrides: Partial<Transaction>): Transaction => ({
+    id: 'txn_1',
+    type: 'expense',
+    amount: { minor: 10000, currency: 'USD' },
+    fx: null,
+    walletId: 'usd',
+    toWalletId: null,
+    toAmount: null,
+    categoryId: 'cat_1',
+    date: '2026-08-20',
+    note: '',
+    recurringRuleId: null,
+    goalId: null,
+    createdAt: '2026-08-20',
+    ...overrides,
+  })
+
+  it('stores what arrived on a transfer exactly as typed', () => {
+    const resolved = resolveDraft(
+      draft({
+        type: 'transfer',
+        walletId: 'usd',
+        toWalletId: 'jpy',
+        amountText: '100',
+        fxMode: 'amount',
+        convertedText: '15230',
+      }),
+      WALLETS,
+    )
+    expect(resolved).toMatchObject({
+      amount: { minor: 10000, currency: 'USD' },
+      toAmount: { minor: 15230, currency: 'JPY' },
+      fx: null,
+      rateOk: true,
+    })
+  })
+
+  it('cannot save a cross-currency transfer until the received amount is typed', () => {
+    const transfer = draft({ type: 'transfer', walletId: 'usd', toWalletId: 'jpy', fxMode: 'amount' })
+    expect(canSaveDraft(transfer, WALLETS)).toBe(false)
+    expect(canSaveDraft({ ...transfer, convertedText: '15230' }, WALLETS)).toBe(true)
+  })
+
+  it('stores what left the wallet on an expense typed in another currency', () => {
+    const payload = buildTransaction(
+      draft({ amountText: '15230', entryCurrency: 'JPY', fxMode: 'amount', convertedText: '99.87' }),
+      WALLETS,
+    )
+    expect(payload!.amount).toEqual({ minor: 9987, currency: 'USD' })
+    expect(payload!.fx!.enteredAmount).toEqual({ minor: 15230, currency: 'JPY' })
+    expect(payload!.fx!.rate).toBeCloseTo(99.87 / 15230, 12)
+  })
+
+  it('refills the converted field from what was stored', () => {
+    const fx: EnteredFx = { enteredAmount: { minor: 15230, currency: 'JPY' }, rate: 99.87 / 15230 }
+    expect(convertedTextFor(tx({ amount: { minor: 9987, currency: 'USD' }, fx }))).toBe('99.87')
+    expect(
+      convertedTextFor(
+        tx({
+          type: 'transfer',
+          toWalletId: 'jpy',
+          categoryId: null,
+          toAmount: { minor: 15230, currency: 'JPY' },
+        }),
+      ),
+    ).toBe('15230')
+    expect(convertedTextFor(tx({}))).toBe('')
+    expect(
+      convertedTextFor(
+        tx({ type: 'transfer', toWalletId: 'usd', toAmount: { minor: 10000, currency: 'USD' } }),
+      ),
+    ).toBe('')
+  })
+
+  it('reopens and saves again without changing a single minor unit', () => {
+    const stored = tx({
+      amount: { minor: 9987, currency: 'USD' },
+      fx: { enteredAmount: { minor: 15230, currency: 'JPY' }, rate: 99.87 / 15230 },
+    })
+    const reopened = draft({
+      amountText: '15230',
+      entryCurrency: 'JPY',
+      fxMode: 'amount',
+      rateText: rateTextFor(stored),
+      convertedText: convertedTextFor(stored),
+    })
+    for (const fxMode of ['amount', 'rate'] as const) {
+      const resaved = buildTransaction({ ...reopened, fxMode }, WALLETS)
+      expect(resaved!.amount).toEqual(stored.amount)
+      expect(resaved!.fx!.enteredAmount).toEqual(stored.fx!.enteredAmount)
+    }
   })
 })

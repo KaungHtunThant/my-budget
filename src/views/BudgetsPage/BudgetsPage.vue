@@ -41,7 +41,14 @@ import { amountPlaceholder, formatMoney } from '@/domain/format'
 import { toDecimalString } from '@/domain/money'
 import { describePeriodConfig, todayIso } from '@/domain/period'
 import type { BudgetStatus, Id } from '@/domain/types'
-import { type AmountEntry, entryNeedsRate, rateTextOf, resolveEntry } from '@/services/fx'
+import {
+  type AmountEntry,
+  type FxMode,
+  convertedTextOf,
+  entryNeedsRate,
+  rateTextOf,
+  resolveEntry,
+} from '@/services/fx'
 import { useBudgetStore } from '@/stores/budget'
 
 import {
@@ -60,7 +67,9 @@ const editingId = ref<Id | null>(null)
 const formCategoryId = ref<Id | null>(null)
 const formLimit = ref('')
 const formCurrency = ref<CurrencyCode>(store.base)
+const formFxMode = ref<FxMode>('amount')
 const formRateText = ref('')
+const formConvertedText = ref('')
 const formRollover = ref(false)
 const pickerOpen = ref(false)
 
@@ -91,7 +100,9 @@ const entry = computed<AmountEntry>(() => ({
   amountText: formLimit.value,
   entryCurrency: formCurrency.value,
   targetCurrency: store.base,
+  fxMode: formFxMode.value,
   rateText: formRateText.value,
+  convertedText: formConvertedText.value,
 }))
 
 const draft = computed<BudgetDraft>(() => ({
@@ -110,7 +121,9 @@ function openNew(): void {
   formCategoryId.value = availableCategories.value[0]?.id ?? null
   formLimit.value = ''
   formCurrency.value = store.base
+  formFxMode.value = 'amount'
   formRateText.value = ''
+  formConvertedText.value = ''
   formRollover.value = false
   modalOpen.value = true
 }
@@ -123,7 +136,9 @@ function openEdit(status: BudgetStatus): void {
   const entered = status.budget.fx?.enteredAmount ?? status.budget.limit
   formLimit.value = toDecimalString(entered)
   formCurrency.value = entered.currency
+  formFxMode.value = 'amount'
   formRateText.value = rateTextOf(status.budget.fx)
+  formConvertedText.value = convertedTextOf(status.budget.fx, status.budget.limit)
   formRollover.value = status.budget.rollover
   modalOpen.value = true
 }
@@ -131,8 +146,11 @@ function openEdit(status: BudgetStatus): void {
 function pickCurrency(code: CurrencyCode): void {
   formCurrency.value = code
   pickerOpen.value = false
-  // A fresh currency needs a fresh rate; a stale one would be silently wrong.
-  if (code !== store.base) formRateText.value = ''
+  // A fresh currency needs a fresh conversion; a stale one would be silently wrong.
+  if (code !== store.base) {
+    formRateText.value = ''
+    formConvertedText.value = ''
+  }
 }
 
 async function save(): Promise<void> {
@@ -302,18 +320,21 @@ async function remove(): Promise<void> {
           <IonNote class="modal-note">
             Budgets are held in {{ store.base }}, and spending in another currency is counted
             against them using the rate stored with each transaction. Tap the currency to type this
-            limit in another one instead — it is converted once, at the rate you give.
+            limit in another one instead — it is converted once, and stored.
           </IonNote>
 
           <FxRateField
             v-if="needsRate"
             v-model="formRateText"
+            v-model:converted-text="formConvertedText"
+            v-model:mode="formFxMode"
             :from="formCurrency"
             :to="store.base"
             :entered="resolved?.entered ?? null"
             :converted="resolved?.amount ?? null"
-            lead="Budgets are held in the base currency, so enter the rate to use. The limit is
-              converted once and stored; later rate changes leave it alone."
+            :amount-label="`Limit in ${store.base}`"
+            lead="Budgets are held in the base currency, so enter the limit in it, or the rate to
+              use. The limit is converted once and stored; later rate changes leave it alone."
           />
 
           <IonButton

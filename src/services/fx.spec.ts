@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CurrencyCode } from '@/domain/currency'
+import { convert } from '@/domain/fx'
+import type { Money } from '@/domain/money'
 import { DEFAULT_PERIOD_CONFIG } from '@/domain/period'
-import type { Settings, Wallet } from '@/domain/types'
+import type { EnteredFx, Settings, Wallet } from '@/domain/types'
 
 import {
   type AmountEntry,
+  type ConversionInput,
+  convertedTextOf,
   currenciesNeedingRates,
   entryIsComplete,
   entryNeedsRate,
   parseRate,
   rateTextOf,
+  resolveConversion,
   resolveEntry,
 } from './fx'
 
@@ -102,7 +107,9 @@ const entry = (overrides: Partial<AmountEntry> = {}): AmountEntry => ({
   amountText: '100',
   entryCurrency: 'USD',
   targetCurrency: 'USD',
+  fxMode: 'rate',
   rateText: '',
+  convertedText: '',
   ...overrides,
 })
 
@@ -194,5 +201,105 @@ describe('rateTextOf', () => {
   it('is empty for a record that never crossed currencies', () => {
     expect(rateTextOf(null)).toBe('')
     expect(rateTextOf(undefined)).toBe('')
+  })
+})
+
+describe('resolveConversion', () => {
+  const vnd = (minor: number): Money => ({ minor, currency: 'VND' })
+  const input = (overrides: Partial<ConversionInput> = {}): ConversionInput => ({
+    fxMode: 'amount',
+    rateText: '',
+    convertedText: '',
+    ...overrides,
+  })
+
+  it('stores the typed amount exactly and implies the rate from it', () => {
+    // The case that prompted the mode: 100,000 VND paid, 14.50 AED off the statement.
+    const result = resolveConversion(vnd(100_000), 'AED', input({ convertedText: '14.50' }))
+    expect(result!.amount).toEqual({ minor: 1450, currency: 'AED' })
+    expect(result!.rate).toBeCloseTo(0.000145, 12)
+  })
+
+  it('accepts a comma decimal mark in the amount', () => {
+    const result = resolveConversion(vnd(100_000), 'AED', input({ convertedText: '14,50' }))
+    expect(result!.amount.minor).toBe(1450)
+  })
+
+  it('gives nothing for a blank, junk or non-positive amount', () => {
+    for (const convertedText of ['', '  ', 'abc', '0', '-3']) {
+      expect(resolveConversion(vnd(100_000), 'AED', input({ convertedText }))).toBeNull()
+    }
+  })
+
+  it('gives nothing, rather than throwing, when the entered amount is zero', () => {
+    expect(resolveConversion(vnd(0), 'AED', input({ convertedText: '14.50' }))).toBeNull()
+  })
+
+  it('reads only the field the mode names', () => {
+    const both = { rateText: '0.0002', convertedText: '14.50' }
+    expect(resolveConversion(vnd(100_000), 'AED', input({ ...both }))!.amount.minor).toBe(1450)
+    expect(
+      resolveConversion(vnd(100_000), 'AED', input({ ...both, fxMode: 'rate' }))!.amount.minor,
+    ).toBe(2000)
+    expect(resolveConversion(vnd(100_000), 'AED', input({ rateText: '0.0002' }))).toBeNull()
+  })
+
+  it('implies a rate that converts back to the typed amount, across precisions', () => {
+    // A stored record re-resolved in rate mode (as `rateTextOf` hands it back) must land on the
+    // same minor units, whichever way the decimals differ.
+    const cases: [Money, CurrencyCode, string][] = [
+      [vnd(100_000), 'AED', '14.50'],
+      [{ minor: 1450, currency: 'AED' }, 'VND', '100000'],
+      [{ minor: 999, currency: 'USD' }, 'KWD', '3.071'],
+      [{ minor: 3071, currency: 'KWD' }, 'JPY', '1543'],
+      [{ minor: 12_345, currency: 'JPY' }, 'USD', '83.17'],
+    ]
+    for (const [entered, target, convertedText] of cases) {
+      const { amount, rate } = resolveConversion(entered, target, input({ convertedText }))!
+      expect(convert(entered, target, rate)).toEqual(amount)
+      const reread = resolveConversion(entered, target, input({ fxMode: 'rate', rateText: String(rate) }))
+      expect(reread!.amount).toEqual(amount)
+    }
+  })
+})
+
+describe('resolveEntry in amount mode', () => {
+  it('freezes the implied rate beside the typed amount', () => {
+    const resolved = resolveEntry(
+      entry({
+        amountText: '100000',
+        entryCurrency: 'VND',
+        targetCurrency: 'AED',
+        fxMode: 'amount',
+        convertedText: '14.50',
+      }),
+    )
+    expect(resolved!.amount).toEqual({ minor: 1450, currency: 'AED' })
+    expect(resolved!.fx!.enteredAmount).toEqual({ minor: 100_000, currency: 'VND' })
+    expect(resolved!.fx!.rate).toBeCloseTo(0.000145, 12)
+    expect(resolved!.rateOk).toBe(true)
+  })
+
+  it('keeps showing the entered amount while the converted one is missing', () => {
+    const resolved = resolveEntry(
+      entry({ entryCurrency: 'EUR', targetCurrency: 'USD', fxMode: 'amount' }),
+    )
+    expect(resolved).toMatchObject({ amount: null, fx: null, rateOk: false })
+    expect(resolved!.entered).toEqual({ minor: 10000, currency: 'EUR' })
+  })
+
+  it('ignores the converted text when nothing crosses currencies', () => {
+    const resolved = resolveEntry(entry({ fxMode: 'amount', convertedText: '1' }))
+    expect(resolved).toMatchObject({ amount: { minor: 10000, currency: 'USD' }, fx: null })
+  })
+})
+
+describe('convertedTextOf', () => {
+  const vndAmount: Money = { minor: 100_000, currency: 'VND' }
+  it('is the stored amount when the record crossed currencies, and empty otherwise', () => {
+    const fx: EnteredFx = { enteredAmount: vndAmount, rate: 0.000145 }
+    expect(convertedTextOf(fx, { minor: 1450, currency: 'AED' })).toBe('14.50')
+    expect(convertedTextOf(null, { minor: 1450, currency: 'AED' })).toBe('')
+    expect(convertedTextOf(undefined, { minor: 1450, currency: 'AED' })).toBe('')
   })
 })

@@ -54,7 +54,9 @@ const entry = (overrides: Partial<AmountEntry> = {}): AmountEntry => ({
   amountText: '250',
   entryCurrency: 'USD',
   targetCurrency: 'USD',
+  fxMode: 'rate',
   rateText: '',
+  convertedText: '',
   ...overrides,
 })
 
@@ -125,5 +127,23 @@ describe('buildBudget', () => {
   it('refuses an incomplete form', () => {
     expect(buildBudget(draft({ categoryId: null }))).toBeNull()
     expect(buildBudget(draft({ entry: entry({ amountText: '' }) }))).toBeNull()
+  })
+})
+
+describe('a limit given as its base amount', () => {
+  it('stores the typed base amount and freezes the rate it implies', () => {
+    const built = buildBudget(
+      draft({ entry: entry({ entryCurrency: 'EUR', fxMode: 'amount', convertedText: '270' }) }),
+    )
+    expect(built).toMatchObject({
+      limit: { minor: 27000, currency: 'USD' },
+      fx: { enteredAmount: { minor: 25000, currency: 'EUR' }, rate: 1.08 },
+    })
+  })
+
+  it('cannot be saved until the base amount is typed', () => {
+    const foreign = entry({ entryCurrency: 'EUR', fxMode: 'amount' })
+    expect(canSaveBudget(draft({ entry: foreign }))).toBe(false)
+    expect(canSaveBudget(draft({ entry: { ...foreign, convertedText: '270' } }))).toBe(true)
   })
 })

@@ -8,6 +8,7 @@ import {
   type RuleDraft,
   buildRule,
   canSaveRule,
+  convertedLabel,
   describeRule,
   monthlyCommitment,
   monthlyFactor,
@@ -55,7 +56,9 @@ const entry = (overrides: Partial<AmountEntry> = {}): AmountEntry => ({
   amountText: '950',
   entryCurrency: 'USD',
   targetCurrency: 'USD',
+  fxMode: 'rate',
   rateText: '',
+  convertedText: '',
   ...overrides,
 })
 
@@ -292,5 +295,16 @@ describe('buildRule', () => {
   it('refuses an incomplete form', () => {
     expect(buildRule({ ...draft, name: ' ' })).toBeNull()
     expect(buildRule({ ...draft, walletId: null })).toBeNull()
+  })
+})
+
+describe('convertedLabel', () => {
+  it('says which way each payment moves, and through which wallet', () => {
+    expect(convertedLabel('expense', 'AED', 'Cash')).toBe('AED charged to Cash')
+    expect(convertedLabel('income', 'AED', 'Cash')).toBe('AED paid into Cash')
+  })
+
+  it('still reads before a wallet is chosen', () => {
+    expect(convertedLabel('expense', 'AED', null)).toBe('AED per payment')
   })
 })
