@@ -6,6 +6,11 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-10-21
+
+Stage 2, first half: data now survives closing the app, and the money logic has moved out of
+the screens into tested services. Local backup (D3) is next.
+
 ### Added
 
 - **Data survives closing the app.** IndexedDB (via `dexie`) is the store of record, behind the
@@ -102,7 +107,7 @@ All notable changes to this project are recorded here. The format follows
   after the form loaded and wiped any category that had been set, because loading an income
   row moves `type` off its `expense` default.
 
-### Planned
+### Not in this release
 
 Remainder of Stage 2 — see [`docs/PLAN.md`](docs/PLAN.md).
 
